@@ -1,0 +1,12 @@
+Make an chrome extension that would allow us to annotate the real webpage/product which then gets saved into an instruction file that LLM can read and implement or change the designs.
+- Use URL and selector to identify the element on the page
+- all comments etc are treated as TODO list that can be read by LLM and marked as done when the task is completed. This way we can have a clear list of what has been done and what needs to be done. Think about .md files for this (has to be parsable by LLM and our system/cli)
+- a new command to attach to existing product, should be run in the root of the project where the tasks md will be created
+- .md file can contain yaml front matter with metadata about the task, such as status, priority, etc. This way we can have a clear overview of the tasks and their status. We can also use this metadata to filter and sort the tasks in the UI. (every tasks should have it)
+- add a feature to take a screenshot of the element or page and attach it to the task. This way we can have a visual reference of the task and the changes that need to be made. We can also use this screenshot in the UI to make it more intuitive and easier to understand. (directory .proto/screenshots)
+- add init attach that will add npm script to the existing project, and prepare it to work with the production webapp with the chrome extension
+- open sidebar when mouse touches the right edge of the screen, and close it when mouse leaves the sidebar area. This way we can have a quick access to the tasks and the UI without having to click on anything. We can also use this feature to make the UI more intuitive and user-friendly.
+- add right mouse click context menu to add a new task for the element that was right-clicked. This way we can quickly add tasks for specific elements on the page without having to open the sidebar and navigate through the UI. We can also use this feature to make the task creation process more efficient and seamless.
+- use the same taks save system for the pure prototype as well, when prototype is served by CLI (in general, both things should work the same way, the new way, no more HTML comments)
+- make sure the prototype is isolated with shadow dom correctly, and al lis readable (no more white on white)
+- make layout dark themed

@@ -1,143 +1,344 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// Overlay CSS — lives inside a Shadow DOM, fully isolated from the host page.
+// No !important needed; the shadow boundary beats any Tailwind/page styles.
+// ─────────────────────────────────────────────────────────────────────────────
+const OVERLAY_CSS = `
+  :host {
+    all: initial;
+    display: block;
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 2147483647;
+    font-family: system-ui, -apple-system, sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+    color: #111827;
+  }
+
+  *, *::before, *::after {
+    box-sizing: border-box;
+  }
+
+  /* ── Status bar ─────────────────────────────────────────────────── */
+  .proto-status {
+    position: fixed;
+    bottom: 16px;
+    right: 16px;
+    background: #1e293b;
+    color: #f1f5f9;
+    padding: 8px 14px;
+    border-radius: 8px;
+    font-size: 13px;
+    pointer-events: auto;
+    user-select: none;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
+  }
+
+  .proto-status kbd {
+    display: inline-block;
+    padding: 1px 5px;
+    background: #334155;
+    border: 1px solid #475569;
+    border-radius: 3px;
+    font-size: 11px;
+    font-family: system-ui, sans-serif;
+    color: #cbd5e1;
+  }
+
+  .proto-status .mode-active { color: #60a5fa; font-weight: 600; }
+  .proto-status .saved-ok    { color: #4ade80; }
+
+  /* ── Annotation popover ─────────────────────────────────────────── */
+  .proto-popover {
+    position: fixed;
+    background: #ffffff;
+    color: #111827;
+    border: 1px solid #d1d5db;
+    border-radius: 10px;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.18);
+    padding: 16px;
+    min-width: 300px;
+    pointer-events: auto;
+  }
+
+  .popover-label {
+    font-size: 12px;
+    color: #6b7280;
+    margin-bottom: 10px;
+  }
+
+  .popover-label strong {
+    color: #374151;
+    font-weight: 600;
+  }
+
+  .proto-popover select {
+    display: block;
+    width: 100%;
+    padding: 6px 8px;
+    margin-bottom: 8px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    background: #f9fafb;
+    color: #111827;
+    font-size: 14px;
+    font-family: system-ui, sans-serif;
+    cursor: pointer;
+    appearance: auto;
+    -webkit-appearance: auto;
+  }
+
+  .proto-popover select:focus {
+    outline: 2px solid #3b82f6;
+    outline-offset: 1px;
+    border-color: #3b82f6;
+  }
+
+  .proto-popover textarea {
+    display: block;
+    width: 100%;
+    min-height: 80px;
+    padding: 8px;
+    margin-bottom: 10px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    background: #f9fafb;
+    color: #111827;
+    font-size: 14px;
+    font-family: system-ui, sans-serif;
+    line-height: 1.5;
+    resize: vertical;
+  }
+
+  .proto-popover textarea:focus {
+    outline: 2px solid #3b82f6;
+    outline-offset: 1px;
+    border-color: #3b82f6;
+  }
+
+  .proto-popover textarea::placeholder { color: #9ca3af; }
+
+  .popover-actions { display: flex; gap: 8px; }
+
+  .proto-popover button {
+    padding: 6px 16px;
+    border-radius: 6px;
+    font-size: 14px;
+    font-family: system-ui, sans-serif;
+    font-weight: 500;
+    line-height: 1.4;
+    cursor: pointer;
+    border: 1px solid #d1d5db;
+    background: #f9fafb;
+    color: #374151;
+    transition: background 0.1s;
+  }
+
+  .proto-popover button:hover        { background: #e5e7eb; }
+  .proto-popover button.btn-primary  { background: #3b82f6; color: #ffffff; border-color: #2563eb; }
+  .proto-popover button.btn-primary:hover { background: #2563eb; }
+
+  /* ── Sidebar ────────────────────────────────────────────────────── */
+  .proto-sidebar {
+    position: fixed;
+    right: 0;
+    top: 0;
+    width: 320px;
+    height: 100vh;
+    background: #ffffff;
+    color: #111827;
+    border-left: 1px solid #e5e7eb;
+    overflow-y: auto;
+    padding: 16px;
+    box-shadow: -4px 0 20px rgba(0, 0, 0, 0.12);
+    pointer-events: auto;
+    transform: translateX(100%);
+    transition: transform 0.2s ease;
+  }
+
+  .proto-sidebar.open { transform: translateX(0); }
+
+  .proto-sidebar h3 {
+    margin: 0 0 16px;
+    font-size: 15px;
+    font-weight: 600;
+    color: #111827;
+  }
+
+  .empty-msg { color: #6b7280; font-size: 14px; }
+
+  .annotation-card {
+    margin: 8px 0;
+    padding: 10px;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    background: #f9fafb;
+  }
+
+  .tag-badge {
+    display: inline-block;
+    padding: 2px 7px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    color: #ffffff;
+    margin-right: 4px;
+  }
+
+  .target-id       { font-size: 11px; color: #9ca3af; }
+  .annotation-text { margin: 6px 0 0; font-size: 13px; color: #374151; line-height: 1.4; }
+`;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Tag configuration — embedded into the injected script via JSON.stringify
+// ─────────────────────────────────────────────────────────────────────────────
+const TAG_COLORS: Record<string, string> = {
+  TODO:     "#ef4444",
+  FEATURE:  "#3b82f6",
+  VARIANT:  "#8b5cf6",
+  KEEP:     "#22c55e",
+  QUESTION: "#f59e0b",
+  CONTEXT:  "#6b7280",
+};
+
+const TAGS = Object.keys(TAG_COLORS);
+
+// Minimal host-page CSS — only the hover outline for annotation mode.
+// Must stay in the light DOM so it can reach [data-proto-id] elements.
+const HOST_PAGE_CSS = `
+  .proto-overlay-active [data-proto-id]:hover {
+    outline: 2px solid #3b82f6 !important;
+    outline-offset: 2px !important;
+    cursor: crosshair !important;
+  }
+`;
+
 export function getOverlayScript(port: number): string {
   return `
-(function() {
+(function () {
   'use strict';
-  const WS_URL = 'ws://localhost:${port}';
-  const API_URL = 'http://localhost:${port}/api/annotate';
 
+  const WS_URL     = 'ws://localhost:${port}';
+  const API_URL    = 'http://localhost:${port}/api/annotate';
+  const TAGS       = ${JSON.stringify(TAGS)};
+  const TAG_COLORS = ${JSON.stringify(TAG_COLORS)};
+
+  // ── Shadow DOM host ──────────────────────────────────────────────────────
+  // All overlay UI lives here — 100% isolated from the host page's CSS.
+  const host = document.createElement('div');
+  host.id = 'proto-studio-root';
+  document.body.appendChild(host);
+  const root = host.attachShadow({ mode: 'open' });
+
+  const styleEl = document.createElement('style');
+  styleEl.textContent = ${JSON.stringify(OVERLAY_CSS)};
+  root.appendChild(styleEl);
+
+  // Hover outline in the light DOM so it can target [data-proto-id] on the page
+  const hostStyle = document.createElement('style');
+  hostStyle.textContent = ${JSON.stringify(HOST_PAGE_CSS)};
+  document.head.appendChild(hostStyle);
+
+  // ── State ────────────────────────────────────────────────────────────────
   let annotationMode = false;
-  let currentHighlight = null;
-  let overlay = null;
-  let sidebar = null;
-  let popover = null;
+  let sidebar  = null;
+  let popover  = null;
 
-  const TAGS = ['TODO', 'FEATURE', 'VARIANT', 'KEEP', 'QUESTION', 'CONTEXT'];
-  const TAG_COLORS = {
-    TODO: '#ef4444', FEATURE: '#3b82f6', VARIANT: '#8b5cf6',
-    KEEP: '#22c55e', QUESTION: '#f59e0b', CONTEXT: '#6b7280'
-  };
-
-  // WebSocket for live reload
+  // ── WebSocket for live reload ────────────────────────────────────────────
   function connectWS() {
     const ws = new WebSocket(WS_URL);
-    ws.onmessage = function(event) {
-      const data = JSON.parse(event.data);
-      if (data.type === 'reload') location.reload();
+    ws.onmessage = function (e) {
+      if (JSON.parse(e.data).type === 'reload') location.reload();
     };
-    ws.onclose = function() { setTimeout(connectWS, 2000); };
-    ws.onerror = function() { ws.close(); };
+    ws.onclose = function () { setTimeout(connectWS, 2000); };
+    ws.onerror = function () { ws.close(); };
   }
   connectWS();
 
-  // Styles
-  const style = document.createElement('style');
-  style.textContent = \`
-    .proto-overlay-active [data-proto-id]:hover {
-      outline: 2px solid #3b82f6 !important;
-      outline-offset: 2px;
-      cursor: crosshair !important;
+  // ── DOM helper ───────────────────────────────────────────────────────────
+  // Creates an element with optional props dict and child nodes/strings.
+  function el(tag, props) {
+    const node = document.createElement(tag);
+    if (props) {
+      for (const key of Object.keys(props)) {
+        if (key === 'className') node.className = props[key];
+        else if (key === 'placeholder') node.placeholder = props[key];
+        else node.setAttribute(key, props[key]);
+      }
     }
-    .proto-badge {
-      position: absolute; font-size: 10px; padding: 2px 6px;
-      border-radius: 4px; color: white; font-family: system-ui;
-      pointer-events: none; z-index: 99998; white-space: nowrap;
+    for (let i = 2; i < arguments.length; i++) {
+      const child = arguments[i];
+      node.appendChild(typeof child === 'string' ? document.createTextNode(child) : child);
     }
-    .proto-popover {
-      position: fixed; z-index: 99999; background: white;
-      border: 1px solid #e5e7eb; border-radius: 8px;
-      box-shadow: 0 10px 25px rgba(0,0,0,0.15); padding: 16px;
-      font-family: system-ui; min-width: 300px;
-    }
-    .proto-popover select, .proto-popover textarea, .proto-popover button {
-      font-family: system-ui; font-size: 14px;
-    }
-    .proto-popover textarea {
-      width: 100%; min-height: 80px; margin: 8px 0; padding: 8px;
-      border: 1px solid #d1d5db; border-radius: 4px; resize: vertical;
-      box-sizing: border-box;
-    }
-    .proto-popover select {
-      width: 100%; padding: 6px 8px; border: 1px solid #d1d5db;
-      border-radius: 4px;
-    }
-    .proto-popover button {
-      padding: 6px 16px; border-radius: 4px; cursor: pointer;
-      border: 1px solid #d1d5db; margin-right: 8px;
-    }
-    .proto-popover .proto-submit {
-      background: #3b82f6; color: white; border-color: #3b82f6;
-    }
-    .proto-sidebar {
-      position: fixed; right: 0; top: 0; width: 320px; height: 100vh;
-      background: white; border-left: 1px solid #e5e7eb; z-index: 99997;
-      overflow-y: auto; font-family: system-ui; padding: 16px;
-      box-shadow: -4px 0 15px rgba(0,0,0,0.1);
-      transform: translateX(100%); transition: transform 0.2s;
-    }
-    .proto-sidebar.open { transform: translateX(0); }
-    .proto-status {
-      position: fixed; bottom: 16px; right: 16px; z-index: 99996;
-      background: #1e293b; color: white; padding: 8px 16px;
-      border-radius: 8px; font-family: system-ui; font-size: 13px;
-      opacity: 0.9;
-    }
-  \`;
-  document.head.appendChild(style);
+    return node;
+  }
 
-  // Status indicator
-  const status = document.createElement('div');
-  status.className = 'proto-status';
-  status.innerHTML = 'Proto Studio · <kbd>Alt+A</kbd> annotate · <kbd>Alt+S</kbd> sidebar';
-  document.body.appendChild(status);
+  function kbd(text)       { return el('kbd', null, text); }
+  function span(cls, text) { return el('span', { className: cls }, text); }
 
-  // Toggle annotation mode
+  // ── Status bar ───────────────────────────────────────────────────────────
+  const status = el('div', { className: 'proto-status' });
+  root.appendChild(status);
+  renderStatusIdle();
+
+  function renderStatusIdle() {
+    status.replaceChildren('Proto Studio · ', kbd('Alt+A'), ' annotate · ', kbd('Alt+S'), ' sidebar');
+  }
+
+  function renderStatusAnnotating() {
+    status.replaceChildren(span('mode-active', '\\u25cf Annotation Mode'), ' \\u00b7 Click an element to annotate');
+  }
+
+  function renderStatusSaved() {
+    status.replaceChildren(span('saved-ok', '\\u2713 Annotation saved'));
+    setTimeout(function () {
+      annotationMode ? renderStatusAnnotating() : renderStatusIdle();
+    }, 2000);
+  }
+
+  // ── Annotation mode toggle ───────────────────────────────────────────────
   function toggleAnnotationMode() {
     annotationMode = !annotationMode;
     document.body.classList.toggle('proto-overlay-active', annotationMode);
-    status.innerHTML = annotationMode
-      ? '<span style="color:#3b82f6">● Annotation Mode</span> · Click an element to annotate'
-      : 'Proto Studio · <kbd>Alt+A</kbd> annotate · <kbd>Alt+S</kbd> sidebar';
-    if (!annotationMode && popover) popover.remove();
+    annotationMode ? renderStatusAnnotating() : renderStatusIdle();
+    if (!annotationMode && popover) { popover.remove(); popover = null; }
   }
 
-  // Show annotation popover
+  // ── Annotation popover ───────────────────────────────────────────────────
   function showPopover(element) {
-    if (popover) popover.remove();
+    if (popover) { popover.remove(); popover = null; }
     const protoId = element.getAttribute('data-proto-id');
     if (!protoId) return;
-    const rect = element.getBoundingClientRect();
 
-    popover = document.createElement('div');
-    popover.className = 'proto-popover';
+    const rect     = element.getBoundingClientRect();
+    const label    = el('div', { className: 'popover-label' }, 'Annotating: ', el('strong', null, protoId));
+    const select   = el('select', null);
+    for (const tag of TAGS) {
+      select.appendChild(el('option', { value: tag }, tag));
+    }
+    const textarea  = el('textarea', { placeholder: 'Describe your feedback...' });
+    const btnSave   = el('button', { className: 'btn-primary' }, 'Save');
+    const btnCancel = el('button', null, 'Cancel');
+    const actions   = el('div', { className: 'popover-actions' }, btnSave, btnCancel);
+
+    popover = el('div', { className: 'proto-popover' }, label, select, textarea, actions);
     popover.style.left = Math.min(rect.left, window.innerWidth - 340) + 'px';
-    popover.style.top = Math.min(rect.bottom + 8, window.innerHeight - 250) + 'px';
-    popover.innerHTML = \`
-      <div style="font-size:12px;color:#6b7280;margin-bottom:8px">
-        Annotating: <strong>\${protoId}</strong>
-      </div>
-      <select id="proto-tag">\${TAGS.map(t =>
-        '<option value="' + t + '">' + t + '</option>').join('')}</select>
-      <textarea id="proto-text" placeholder="Describe your feedback..."></textarea>
-      <div>
-        <button class="proto-submit" id="proto-save">Save</button>
-        <button id="proto-cancel">Cancel</button>
-      </div>
-    \`;
-    document.body.appendChild(popover);
+    popover.style.top  = Math.min(rect.bottom + 8, window.innerHeight - 260) + 'px';
 
-    document.getElementById('proto-text').focus();
-    document.getElementById('proto-save').onclick = function() {
-      const tag = document.getElementById('proto-tag').value;
-      const text = document.getElementById('proto-text').value.trim();
+    root.appendChild(popover);
+    textarea.focus();
+
+    btnSave.addEventListener('click', function () {
+      const text = textarea.value.trim();
       if (!text) return;
-      submitAnnotation(protoId, tag, text);
-      popover.remove();
-      popover = null;
-    };
-    document.getElementById('proto-cancel').onclick = function() {
-      popover.remove();
-      popover = null;
-    };
+      submitAnnotation(protoId, select.value, text);
+      popover.remove(); popover = null;
+    });
+
+    btnCancel.addEventListener('click', function () {
+      popover.remove(); popover = null;
+    });
   }
 
   function submitAnnotation(protoId, tag, text) {
@@ -145,33 +346,18 @@ export function getOverlayScript(port: number): string {
     fetch(API_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        file: file,
-        targetSelector: 'data-proto-id="' + protoId + '"',
-        tag: tag,
-        text: text,
-      }),
+      body: JSON.stringify({ file, targetSelector: 'data-proto-id="' + protoId + '"', tag, text }),
     })
-    .then(function(r) { return r.json(); })
-    .then(function(d) {
-      if (d.success) {
-        status.innerHTML = '<span style="color:#22c55e">✓ Annotation saved</span>';
-        setTimeout(function() {
-          status.innerHTML = annotationMode
-            ? '<span style="color:#3b82f6">● Annotation Mode</span> · Click to annotate'
-            : 'Proto Studio · <kbd>Alt+A</kbd> annotate';
-        }, 2000);
-      }
-    })
-    .catch(function(err) { console.error('Proto Studio:', err); });
+      .then(function (r) { return r.json(); })
+      .then(function (d) { if (d.success) renderStatusSaved(); })
+      .catch(function (err) { console.error('[Proto Studio]', err); });
   }
 
-  // Sidebar
+  // ── Sidebar ──────────────────────────────────────────────────────────────
   function toggleSidebar() {
     if (!sidebar) {
-      sidebar = document.createElement('div');
-      sidebar.className = 'proto-sidebar';
-      document.body.appendChild(sidebar);
+      sidebar = el('div', { className: 'proto-sidebar' });
+      root.appendChild(sidebar);
     }
     sidebar.classList.toggle('open');
     if (sidebar.classList.contains('open')) refreshSidebar();
@@ -179,48 +365,60 @@ export function getOverlayScript(port: number): string {
 
   function refreshSidebar() {
     if (!sidebar) return;
-    const comments = document.documentElement.innerHTML.match(
+    const matches = document.documentElement.innerHTML.match(
       /<!--\\s*@(TODO|FEATURE|VARIANT|KEEP|QUESTION|CONTEXT)\\[([^\\]]+)\\]\\s*([\\s\\S]*?)\\s*-->/g
     ) || [];
-    let html = '<h3 style="margin:0 0 16px">Annotations (' + comments.length + ')</h3>';
-    if (comments.length === 0) {
-      html += '<p style="color:#6b7280;font-size:14px">No annotations yet.</p>';
+
+    sidebar.replaceChildren(el('h3', null, 'Annotations (' + matches.length + ')'));
+
+    if (matches.length === 0) {
+      sidebar.appendChild(el('p', { className: 'empty-msg' }, 'No annotations yet.'));
+      return;
     }
-    for (const c of comments) {
+
+    for (const c of matches) {
       const m = c.match(/<!--\\s*@(\\w+)\\[([^\\]]+)\\]\\s*([\\s\\S]*?)\\s*-->/);
-      if (m) {
-        const color = TAG_COLORS[m[1]] || '#6b7280';
-        html += '<div style="margin:8px 0;padding:8px;border:1px solid #e5e7eb;border-radius:6px">' +
-          '<span style="background:' + color + ';color:white;padding:2px 6px;border-radius:3px;font-size:11px">' +
-          m[1] + '</span> ' +
-          '<span style="font-size:12px;color:#6b7280">' + m[2] + '</span>' +
-          '<p style="margin:4px 0 0;font-size:13px">' + m[3] + '</p></div>';
-      }
+      if (!m) continue;
+      const tagName  = m[1];
+      const targetId = m[2];
+      const text     = m[3].trim();
+      const color    = TAG_COLORS[tagName] || '#6b7280';
+
+      const badge = el('span', { className: 'tag-badge' }, tagName);
+      badge.style.background = color;
+
+      const card = el('div', { className: 'annotation-card' },
+        badge,
+        el('span', { className: 'target-id' }, targetId),
+        el('p',    { className: 'annotation-text' }, text),
+      );
+      sidebar.appendChild(card);
     }
-    sidebar.innerHTML = html;
   }
 
-  // Event listeners
-  document.addEventListener('keydown', function(e) {
+  // ── Keyboard shortcuts ───────────────────────────────────────────────────
+  document.addEventListener('keydown', function (e) {
     if (e.altKey && e.key === 'a') { e.preventDefault(); toggleAnnotationMode(); }
     if (e.altKey && e.key === 's') { e.preventDefault(); toggleSidebar(); }
     if (e.key === 'Escape') {
-      if (popover) { popover.remove(); popover = null; }
-      if (annotationMode) toggleAnnotationMode();
-      if (sidebar && sidebar.classList.contains('open')) sidebar.classList.remove('open');
+      if (popover)                                             { popover.remove(); popover = null; }
+      else if (annotationMode)                                 { toggleAnnotationMode(); }
+      else if (sidebar && sidebar.classList.contains('open')) { sidebar.classList.remove('open'); }
     }
   });
 
-  document.addEventListener('click', function(e) {
+  // ── Click-to-annotate ────────────────────────────────────────────────────
+  document.addEventListener('click', function (e) {
     if (!annotationMode) return;
+    // Ignore clicks inside our own shadow host (popover, sidebar, status bar)
+    if (e.composedPath().indexOf(host) !== -1) return;
     const target = e.target.closest('[data-proto-id]');
     if (!target) return;
-    if (e.target.closest('.proto-popover, .proto-sidebar, .proto-status')) return;
     e.preventDefault();
     e.stopPropagation();
     showPopover(target);
   }, true);
 
-})();
+}());
 `;
 }
