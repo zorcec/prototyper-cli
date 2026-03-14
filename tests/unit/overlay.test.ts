@@ -195,12 +195,12 @@ describe("getOverlayScript", () => {
     expect(script).toContain("forceHideTooltip");
   });
 
-  it("falls back to data-testid when data-proto-id is absent", () => {
+  it("uses buildElementSelector for flexible selector generation", () => {
     const script = getOverlayScript(3700);
+    expect(script).toContain("buildElementSelector");
+    // Falls back through: data-proto-id → data-testid → id → CSS path
     expect(script).toContain("data-testid");
-    expect(script).toContain("selectorAttr");
-    // selector is built from attribute name, not hardcoded to data-proto-id
-    expect(script).toContain("[' + selectorAttr + '");
+    expect(script).toContain("data-proto-id");
   });
 
   it("submitTask uses full selector string, not bare protoId", () => {

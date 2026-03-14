@@ -1,9 +1,8 @@
 // Proto Studio Chrome Extension — Content Script
-// Injects the overlay into the current page, connecting to the CLI server.
-// Skips injection if the server-injected overlay is already present.
-// The overlay script is shared with the CLI server (getOverlayScript).
-
-import { getOverlayScript } from "../client/overlay.js";
+// Injects the overlay into the current page by asking the background service
+// worker to run it in the MAIN world via chrome.scripting.executeScript.
+// This bypasses the page's Content-Security-Policy so it works on Next.js,
+// Vite, and any other dev server that sets a strict script-src CSP.
 
 const DEFAULT_PORT = 3700;
 const STORAGE_KEY = "proto-studio-config";
@@ -25,26 +24,34 @@ async function init() {
   const config = await getConfig();
   if (!config.enabled) return;
 
-  // Don't inject if server overlay already present
+  // Skip if already injected (e.g. server-side injection or duplicate run)
   if (document.getElementById("proto-studio-root")) return;
 
-  injectOverlay(config.port);
-  listenForScreenshotRequests();
-}
+  // Ask the background service worker to inject the overlay via
+  // chrome.scripting.executeScript (world: MAIN) so it bypasses page CSP.
+  chrome.runtime.sendMessage(
+    { type: "inject-overlay", port: config.port },
+    (response) => {
+      if (chrome.runtime.lastError || !response?.success) {
+        console.warn(
+          "[Proto Studio] scripting injection failed:",
+          chrome.runtime.lastError?.message ?? response?.reason,
+          "— check that the extension has host permissions for this origin.",
+        );
+      }
+    },
+  );
 
-function injectOverlay(port: number) {
-  const script = document.createElement("script");
-  script.setAttribute("data-proto-overlay", "extension");
-  script.textContent = getOverlayScript(port);
-  document.body.appendChild(script);
+  // Screenshot relay: the overlay (running in MAIN world) dispatches
+  // 'proto-capture-request' on the shared DOM; we forward it to background
+  // which has captureVisibleTab access, and relay the result back.
+  listenForScreenshotRequests();
 }
 
 /**
  * Relay screenshot capture requests from the injected overlay to the background
  * service worker, then dispatch the result back as a custom event.
- * The injected overlay fires 'proto-capture-request' and listens for
- * 'proto-capture-response'. Content scripts can call chrome.runtime.sendMessage
- * while injected page scripts cannot.
+ * Content scripts share the DOM event bus with MAIN world scripts.
  */
 function listenForScreenshotRequests() {
   document.addEventListener("proto-capture-request", () => {

@@ -125,6 +125,83 @@ export function getOverlayScript(port: number): string {
 
   connectWS();
 
+  // ── Element selector helper ───────────────────────────────────────────
+  // Builds the best available CSS selector for any DOM element so that
+  // the overlay can annotate elements even when they have no data-proto-id
+  // or data-testid.  Priority: data-proto-id > data-testid > id > CSS path.
+  function buildElementSelector(element) {
+    var protoId = element.getAttribute('data-proto-id');
+    if (protoId) return { selector: '[data-proto-id="' + protoId + '"]', display: protoId };
+
+    var testId = element.getAttribute('data-testid');
+    if (testId) return { selector: '[data-testid="' + testId + '"]', display: 'testid: ' + testId };
+
+    var elemId = element.id;
+    if (elemId && /^[a-zA-Z_-]/.test(elemId)) return { selector: '#' + elemId, display: '#' + elemId };
+
+    // Build a short CSS path (max 4 levels)
+    var parts = [];
+    var cur = element;
+    while (cur && cur !== document.body && parts.length < 4) {
+      var tag = cur.tagName.toLowerCase();
+      var parent = cur.parentElement;
+      if (parent) {
+        var sameTags = [];
+        for (var ci = 0; ci < parent.children.length; ci++) {
+          if (parent.children[ci].tagName === cur.tagName) sameTags.push(parent.children[ci]);
+        }
+        if (sameTags.length > 1) tag += ':nth-of-type(' + (sameTags.indexOf(cur) + 1) + ')';
+      }
+      // Append first non-proto class for readability
+      for (var cj = 0; cj < cur.classList.length; cj++) {
+        if (!cur.classList[cj].startsWith('proto-')) { tag += '.' + cur.classList[cj]; break; }
+      }
+      parts.unshift(tag);
+      cur = cur.parentElement;
+    }
+    var sel = parts.join(' > ');
+    return { selector: sel, display: sel };
+  }
+
+  // ── Annotation-mode hover highlight ───────────────────────────────────
+  // Track the element directly under the cursor and apply a CSS class for
+  // the blue outline, so only the top-most element is highlighted (not all
+  // ancestors which :hover would affect).
+  var HOVER_CLASS = 'proto-hover-highlight';
+  var hoverTarget = null;
+
+  function onAnnotateMouseOver(e) {
+    var t = e.target;
+    if (!t || t === document.documentElement || t === document.body) return;
+    if (e.composedPath().indexOf(host) !== -1) return;
+    if (hoverTarget === t) return;
+    if (hoverTarget) { try { hoverTarget.classList.remove(HOVER_CLASS); } catch(_) {} }
+    hoverTarget = t;
+    try { t.classList.add(HOVER_CLASS); } catch(_) {}
+  }
+
+  function onAnnotateMouseOut(e) {
+    var t = e.target;
+    if (t === hoverTarget) {
+      try { t.classList.remove(HOVER_CLASS); } catch(_) {}
+      hoverTarget = null;
+    }
+  }
+
+  function startAnnotationHover() {
+    document.addEventListener('mouseover', onAnnotateMouseOver, true);
+    document.addEventListener('mouseout', onAnnotateMouseOut, true);
+  }
+
+  function stopAnnotationHover() {
+    document.removeEventListener('mouseover', onAnnotateMouseOver, true);
+    document.removeEventListener('mouseout', onAnnotateMouseOut, true);
+    if (hoverTarget) {
+      try { hoverTarget.classList.remove(HOVER_CLASS); } catch(_) {}
+      hoverTarget = null;
+    }
+  }
+
   // ── DOM helper ────────────────────────────────────────────────────────
   function el(tag, props) {
     var node = document.createElement(tag);
@@ -187,7 +264,12 @@ export function getOverlayScript(port: number): string {
     annotationMode = !annotationMode;
     document.body.classList.toggle('proto-overlay-active', annotationMode);
     annotationMode ? renderStatusAnnotating() : renderStatusIdle();
-    if (!annotationMode && popover) { popover.remove(); popover = null; }
+    if (annotationMode) {
+      startAnnotationHover();
+    } else {
+      stopAnnotationHover();
+      if (popover) { popover.remove(); popover = null; }
+    }
   }
 
   // ── Task indicators ───────────────────────────────────────────────────
@@ -417,14 +499,11 @@ export function getOverlayScript(port: number): string {
   // ── Annotation popover (create new task) ─────────────────────────────
   function showPopover(element, x, y) {
     if (popover) { popover.remove(); popover = null; }
-    var protoId = element.getAttribute('data-proto-id');
-    var testId  = element.getAttribute('data-testid');
-    var selectorId   = protoId || testId;
-    if (!selectorId) return;
-    var selectorAttr = protoId ? 'data-proto-id' : 'data-testid';
-    var selector     = '[' + selectorAttr + '="' + selectorId + '"]';
+    var info = buildElementSelector(element);
+    var selector    = info.selector;
+    var displayName = info.display;
 
-    var label    = el('div', { className: 'popover-label' }, 'Annotating: ', el('strong', null, selectorId));
+    var label    = el('div', { className: 'popover-label' }, 'Annotating: ', el('strong', null, displayName.slice(0, 60)));
     var titleInput = el('input', { type: 'text', placeholder: 'Task title...' });
     var select   = el('select', null);
     for (var i = 0; i < TAGS.length; i++) {
@@ -746,10 +825,8 @@ export function getOverlayScript(port: number): string {
   // ── Context menu (right-click) ────────────────────────────────────────
   function showContextMenu(element, x, y) {
     hideContextMenu();
-    var protoId = element.getAttribute('data-proto-id');
-    var testId  = element.getAttribute('data-testid');
-    var selectorId = protoId || testId;
-    if (!selectorId) return;
+    var info = buildElementSelector(element);
+    var displayName = info.display;
 
     contextMenu = el('div', { className: 'proto-context-menu' });
     contextMenu.style.left = Math.min(x, window.innerWidth - 220) + 'px';
@@ -766,7 +843,7 @@ export function getOverlayScript(port: number): string {
       var item = menuItems[i];
       var btn = el('button', null,
         el('span', { className: 'menu-icon' }, item.icon),
-        item.label + ' for "' + selectorId + '"'
+        item.label + ' for "' + displayName.slice(0, 30) + '"'
       );
       (function (tag) {
         btn.addEventListener('click', function () {
@@ -805,6 +882,8 @@ export function getOverlayScript(port: number): string {
   }, true);
 
   // ── Keyboard shortcuts ────────────────────────────────────────────────
+  // Use capture phase so Alt+A / Alt+S fire even if the host app has its
+  // own keydown handlers in the bubble phase.
   document.addEventListener('keydown', function (e) {
     if (e.altKey && e.key === 'a') { e.preventDefault(); toggleAnnotationMode(); }
     if (e.altKey && e.key === 's') { e.preventDefault(); toggleSidebar(); }
@@ -814,12 +893,12 @@ export function getOverlayScript(port: number): string {
       else if (annotationMode) { toggleAnnotationMode(); }
       else if (sidebar && sidebar.classList.contains('open')) { sidebar.classList.remove('open'); sidebarPinned = false; }
     }
-  });
+  }, true);
 
   // ── Right-click context menu ──────────────────────────────────────────
   document.addEventListener('contextmenu', function (e) {
-    var target = e.target.closest('[data-proto-id]') || e.target.closest('[data-testid]');
-    if (!target) return;
+    var target = e.target.closest('[data-proto-id]') || e.target.closest('[data-testid]') || e.target;
+    if (!target || target === document.body || target === document.documentElement) return;
     if (e.composedPath().indexOf(host) !== -1) return;
     e.preventDefault();
     showContextMenu(target, e.clientX, e.clientY);
@@ -829,8 +908,8 @@ export function getOverlayScript(port: number): string {
   document.addEventListener('click', function (e) {
     if (!annotationMode) return;
     if (e.composedPath().indexOf(host) !== -1) return;
-    var target = e.target.closest('[data-proto-id]') || e.target.closest('[data-testid]');
-    if (!target) return;
+    var target = e.target.closest('[data-proto-id]') || e.target.closest('[data-testid]') || e.target;
+    if (!target || target === document.body || target === document.documentElement) return;
     e.preventDefault();
     e.stopPropagation();
     showPopover(target, e.clientX, e.clientY);

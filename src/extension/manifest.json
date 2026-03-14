@@ -3,7 +3,8 @@
   "name": "Proto Studio",
   "version": "1.0.0",
   "description": "Annotate real webpages with tasks for LLM-driven development",
-  "permissions": ["activeTab", "contextMenus", "storage", "alarms"],
+  "permissions": ["activeTab", "contextMenus", "storage", "alarms", "scripting"],
+  "host_permissions": ["*://*/*"],
   "background": {
     "service_worker": "background.js",
     "type": "module"

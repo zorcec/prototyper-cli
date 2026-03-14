@@ -1,8 +1,9 @@
 import { readFileSync, readdirSync, statSync, existsSync } from "node:fs";
 import { join, resolve, basename, extname, dirname } from "node:path";
+import { createServer, request as httpRequest } from "node:http";
+import { request as httpsRequest } from "node:https";
 import express from "express";
 import { WebSocketServer, WebSocket } from "ws";
-import { createServer } from "node:http";
 import chalk from "chalk";
 import { injectScript } from "../core/html-parser.js";
 import { createFileWatcher } from "./watcher.js";
@@ -141,6 +142,21 @@ function registerTaskApi(
 }
 
 /**
+ * CORS middleware: allow cross-origin requests so the overlay running inside an
+ * existing app (different port/origin) can call the Proto Studio task API.
+ * Safe for a localhost development tool.
+ */
+function useCors(app: express.Application): void {
+  app.use((_req: express.Request, res: express.Response, next: express.NextFunction) => {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+    if (_req.method === "OPTIONS") { res.status(204).end(); return; }
+    next();
+  });
+}
+
+/**
  * API-only mode: starts the task API server without serving any HTML files.
  * Intended for use with existing hosted/served projects — the Chrome extension
  * connects to this server to read and write tasks while you browse your app.
@@ -152,6 +168,7 @@ async function serveApiOnly(
   ensureTaskDirs(projectDir);
 
   const app = express();
+  useCors(app);
   app.use(express.json({ limit: "10mb" }));
   const httpServer = createServer(app);
   const wss = new WebSocketServer({ server: httpServer });
@@ -179,14 +196,21 @@ async function serveApiOnly(
   const screenshotsDir = getScreenshotsDir(projectDir);
   app.use("/screenshots", express.static(screenshotsDir, { maxAge: "1h" }));
 
+  const overlayScript = getOverlayScript(options.port);
+  app.get("/proto-overlay.js", (_req, res) => {
+    res.type("application/javascript").send(overlayScript);
+  });
+
   registerTaskApi(app, projectDir, broadcast);
 
   return new Promise<ServeInstance>((resolvePromise, reject) => {
     httpServer.listen(options.port, () => {
       const url = `http://localhost:${options.port}`;
       console.log(chalk.green(`✓ Prototype Studio API running at ${url}`));
-      console.log(chalk.cyan("  Mode: API-only (connect Chrome extension to annotate your existing app)"));
-      console.log(chalk.dim("  Task API: " + url + "/api/tasks"));
+      console.log(chalk.cyan("  Mode: API-only (use Chrome extension or add the overlay script manually)"));
+      console.log(chalk.dim("  Task API:      " + url + "/api/tasks"));
+      console.log(chalk.dim("  Overlay script: " + url + "/proto-overlay.js"));
+      console.log(chalk.dim("  Or run: proto serve <your-app-url>  to auto-proxy\n"));
       console.log(chalk.dim("  Press Ctrl+C to stop\n"));
 
       resolvePromise({
@@ -202,14 +226,194 @@ async function serveApiOnly(
   });
 }
 
+/**
+ * Proxy mode: transparently reverse-proxies an existing hosted app, injecting
+ * the Proto Studio overlay into every HTML response.
+ *
+ * Usage: proto serve http://localhost:3000
+ *
+ * Benefits over API-only mode:
+ *  - No Chrome extension needed
+ *  - Next.js / Vite HMR WebSocket connections are forwarded to the upstream
+ *  - CSP headers that would block the overlay are stripped automatically
+ */
+async function serveProxy(
+  upstreamUrl: string,
+  options: ServeOptions,
+): Promise<ServeInstance> {
+  const projectDir = process.cwd();
+  ensureTaskDirs(projectDir);
+
+  const upstream = new URL(upstreamUrl);
+  const isHttps = upstream.protocol === "https:";
+  const upstreamPort = upstream.port
+    ? parseInt(upstream.port, 10)
+    : isHttps ? 443 : 80;
+  const requester = isHttps ? httpsRequest : httpRequest;
+
+  const app = express();
+  useCors(app);
+  app.use(express.json({ limit: "10mb" }));
+
+  const httpServer = createServer(app);
+  // noServer: we handle upgrades manually to route Proto Studio WS vs. upstream WS
+  const wss = new WebSocketServer({ noServer: true });
+
+  const broadcast = (data: object) => {
+    const msg = JSON.stringify(data);
+    for (const client of wss.clients) {
+      if (client.readyState === WebSocket.OPEN) client.send(msg);
+    }
+  };
+
+  wss.on("connection", (ws) => {
+    ws.on("message", (raw) => {
+      try {
+        const msg = JSON.parse(raw.toString());
+        if (msg.type === "ping") ws.send(JSON.stringify({ type: "pong" }));
+      } catch { /* ignore */ }
+    });
+  });
+
+  // Route WebSocket upgrades: Proto Studio WS at "/" vs. upstream HMR at any other path
+  httpServer.on("upgrade", (req, socket, head) => {
+    const reqPath = req.url ?? "/";
+    if (reqPath === "/" || reqPath === "") {
+      // Proto Studio overlay WS
+      wss.handleUpgrade(req, socket, head, (ws) => wss.emit("connection", ws, req));
+      return;
+    }
+    // Forward all other WS upgrades (Next.js HMR, Vite, webpack-dev-server, etc.)
+    const wsScheme = isHttps ? "wss:" : "ws:";
+    const upstreamWsUrl = `${wsScheme}//${upstream.host}${reqPath}`;
+    const proxyWs = new WebSocket(upstreamWsUrl, {
+      headers: Object.fromEntries(
+        Object.entries(req.headers)
+          .filter(([k]) => !["host", "upgrade", "connection"].includes(k.toLowerCase()))
+          .map(([k, v]) => [k, String(v)]),
+      ),
+    });
+    proxyWs.on("open", () => {
+      wss.handleUpgrade(req, socket, head, (clientWs) => {
+        clientWs.on("message", (data, isBinary) => {
+          if (proxyWs.readyState === WebSocket.OPEN) proxyWs.send(data, { binary: isBinary });
+        });
+        proxyWs.on("message", (data, isBinary) => {
+          if (clientWs.readyState === WebSocket.OPEN) clientWs.send(data, { binary: isBinary });
+        });
+        clientWs.on("close", () => proxyWs.close());
+        proxyWs.on("close", () => clientWs.close());
+        clientWs.on("error", () => proxyWs.close());
+        proxyWs.on("error", () => clientWs.close());
+      });
+    });
+    proxyWs.on("error", () => socket.destroy());
+  });
+
+  const overlayScript = getOverlayScript(options.port);
+  const screenshotsDir = getScreenshotsDir(projectDir);
+  app.use("/screenshots", express.static(screenshotsDir, { maxAge: "1h" }));
+
+  app.get("/proto-overlay.js", (_req, res) => {
+    res.type("application/javascript").send(overlayScript);
+  });
+
+  registerTaskApi(app, projectDir, broadcast);
+
+  // Proxy everything else to the upstream app
+  app.use((req, res) => {
+    const headers: Record<string, string> = {};
+    for (const [k, v] of Object.entries(req.headers)) {
+      if (typeof v === "string") headers[k] = v;
+    }
+    headers["host"] = upstream.host;
+
+    const proxyReq = requester(
+      { hostname: upstream.hostname, port: upstreamPort, path: req.url, method: req.method, headers },
+      (proxyRes) => {
+        const contentType = proxyRes.headers["content-type"] ?? "";
+        const isHtml = contentType.includes("text/html");
+
+        // Build the response headers, stripping headers that would break the overlay
+        const outHeaders: Record<string, string | string[] | undefined> = {};
+        for (const [k, v] of Object.entries(proxyRes.headers)) {
+          const key = k.toLowerCase();
+          if (key === "content-security-policy" ||
+              key === "content-security-policy-report-only" ||
+              key === "x-frame-options") continue;
+          if (isHtml && (key === "content-length" || key === "transfer-encoding")) continue;
+          outHeaders[k] = v;
+        }
+
+        if (isHtml) {
+          const chunks: Buffer[] = [];
+          proxyRes.on("data", (chunk: Buffer) => chunks.push(chunk));
+          proxyRes.on("end", () => {
+            const body = Buffer.concat(chunks).toString("utf8");
+            const injected = injectScript(body, overlayScript);
+            outHeaders["content-type"] = "text/html; charset=utf-8";
+            outHeaders["content-length"] = String(Buffer.byteLength(injected, "utf8"));
+            res.writeHead(proxyRes.statusCode ?? 200, outHeaders);
+            res.end(injected);
+          });
+          proxyRes.on("error", (err) => {
+            if (!res.headersSent) res.status(502).send(`[Proto Studio] Upstream error: ${err.message}`);
+          });
+        } else {
+          res.writeHead(proxyRes.statusCode ?? 200, outHeaders);
+          proxyRes.pipe(res, { end: true });
+        }
+      },
+    );
+
+    proxyReq.on("error", (err) => {
+      if (!res.headersSent) {
+        res.status(502).send(
+          `[Proto Studio] Cannot reach ${upstreamUrl}: ${err.message}\nMake sure your app is running.`,
+        );
+      }
+    });
+
+    req.pipe(proxyReq, { end: true });
+  });
+
+  return new Promise<ServeInstance>((resolvePromise, reject) => {
+    httpServer.listen(options.port, () => {
+      const url = `http://localhost:${options.port}`;
+      console.log(chalk.green(`✓ Prototype Studio proxy running at ${url}`));
+      console.log(chalk.cyan(`  Proxying: ${upstreamUrl}  (overlay injected into all HTML pages)`));
+      console.log(chalk.dim("  Task API:       " + url + "/api/tasks"));
+      console.log(chalk.dim("  Overlay script: " + url + "/proto-overlay.js"));
+      console.log(chalk.dim("  Press Ctrl+C to stop\n"));
+
+      if (options.open) {
+        import("open").then((mod) => mod.default(url)).catch(() => {});
+      }
+
+      resolvePromise({
+        url,
+        close: async () => {
+          wss.close();
+          await new Promise<void>((r) => httpServer.close(() => r()));
+        },
+      });
+    });
+    httpServer.on("error", reject);
+  });
+}
+
 export async function serve(
   target: string | undefined,
   options: ServeOptions,
 ): Promise<ServeInstance> {
-  // API-only mode: no target provided — just serve the task API for use with
-  // an existing hosted project (the Chrome extension connects to this server).
+  // API-only mode: no target provided
   if (!target) {
     return serveApiOnly(process.cwd(), options);
+  }
+
+  // Proxy mode: target is a URL of an existing hosted app
+  if (target.startsWith("http://") || target.startsWith("https://")) {
+    return serveProxy(target, options);
   }
 
   const absTarget = resolve(target);
@@ -230,6 +434,7 @@ export async function serve(
   ensureTaskDirs(projectDir);
 
   const app = express();
+  useCors(app);
   app.use(express.json({ limit: "10mb" }));
   const httpServer = createServer(app);
   const wss = new WebSocketServer({ server: httpServer });
@@ -263,6 +468,13 @@ export async function serve(
     "/screenshots",
     express.static(screenshotsDir, { maxAge: "1h" }),
   );
+
+  // ── Serve overlay as a standalone JS file ────────────────────────────────
+  if (overlayScript) {
+    app.get("/proto-overlay.js", (_req, res) => {
+      res.type("application/javascript").send(overlayScript);
+    });
+  }
 
   // ── Serve HTML files ─────────────────────────────────────────────────────
   if (isDir) {

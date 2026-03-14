@@ -1,6 +1,8 @@
 // Proto Studio Chrome Extension — Background Service Worker (MV3)
 // Maintains connection state and relays between popup and content script.
 
+import { getOverlayScript } from "../client/overlay.js";
+
 const DEFAULT_PORT = 3700;
 const STORAGE_KEY = "proto-studio-config";
 
@@ -25,7 +27,7 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
 });
 
 // Message handling between popup and content script
-chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.type === "get-config") {
     chrome.storage.local.get(STORAGE_KEY, (result) => {
       sendResponse(result[STORAGE_KEY] || { port: DEFAULT_PORT, enabled: true });
@@ -48,6 +50,32 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       sendResponse({ success: true });
     });
     return true;
+  }
+
+  /**
+   * Inject the overlay into the page using chrome.scripting.executeScript with
+   * world: "MAIN".  This runs the code in the page's own JS context rather than
+   * the extension's isolated world, and — critically — completely bypasses the
+   * page's Content-Security-Policy.  Without this, Next.js / Vite apps that set
+   * a strict CSP silently block the inline <script> tag injection.
+   */
+  if (msg.type === "inject-overlay") {
+    const tabId = sender.tab?.id;
+    if (!tabId) { sendResponse({ success: false, reason: "no-tab" }); return true; }
+
+    const overlayCode = getOverlayScript(msg.port as number);
+    chrome.scripting
+      .executeScript({
+        target: { tabId },
+        world: "MAIN",
+        // Indirect eval runs in global scope — extension-injected scripts are
+        // not subject to the page's script-src CSP directive.
+        func: (code: string) => { (0, eval)(code); },
+        args: [overlayCode],
+      })
+      .then(() => sendResponse({ success: true }))
+      .catch((err: Error) => sendResponse({ success: false, reason: err.message }));
+    return true; // async response
   }
 
   if (msg.type === "capture-screenshot") {

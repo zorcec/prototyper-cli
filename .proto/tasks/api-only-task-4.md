@@ -1,12 +1,11 @@
 ---
-id: 5fd06d5d
-status: done
+id: 613ddc13
+status: todo
 priority: medium
 tag: TODO
 url: "http://localhost:5173/checkout"
 selector: "[data-testid="submit-btn"]"
-created: 2026-03-14T15:50:39.788Z
-updated: 2026-03-14T17:39:23.979Z
+created: 2026-03-14T17:41:50.909Z
 ---
 
 # API-only task

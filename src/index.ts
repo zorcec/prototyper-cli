@@ -40,8 +40,8 @@ program
 
 program
   .command("serve")
-  .description("Serve HTML prototype(s) or task API server with overlay")
-  .argument("[target]", "HTML file or directory containing HTML files (omit to run API-only for use with an existing hosted project)")
+  .description("Serve HTML prototype(s), proxy an existing app with overlay, or start API-only task server")
+  .argument("[target]", "HTML file, directory of HTML files, or URL of an existing app (e.g. http://localhost:3000)")
   .option("-p, --port <port>", "Port number", "3700")
   .option("--no-open", "Do not open browser automatically")
   .action(async (target: string | undefined, opts: { port: string; open: boolean }) => {

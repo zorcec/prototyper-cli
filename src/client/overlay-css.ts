@@ -478,11 +478,17 @@ export const OVERLAY_CSS = `
   .remove-screenshot-btn:hover { background: rgba(248, 113, 113, 0.2); }
 `;
 
-// Host-page CSS for hover outline in annotation mode
+// Host-page CSS for hover outline in annotation mode.
+// .proto-hover-highlight is toggled by JS on the directly-hovered element
+// (avoids the problem of :hover applying to all ancestors at once).
 export const HOST_PAGE_CSS = `
-  .proto-overlay-active [data-proto-id]:hover {
+  .proto-overlay-active * {
+    cursor: crosshair !important;
+  }
+  .proto-overlay-active .proto-hover-highlight,
+  .proto-overlay-active [data-proto-id]:hover,
+  .proto-overlay-active [data-testid]:hover {
     outline: 2px solid #3b82f6 !important;
     outline-offset: 2px !important;
-    cursor: crosshair !important;
   }
 `;
