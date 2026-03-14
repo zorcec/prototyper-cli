@@ -2,7 +2,8 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { exportFile, getExportPreamble } from "../../src/commands/export.js";
+import { exportFile, getExportPreamble, exportTasks } from "../../src/commands/export.js";
+import { createTask, ensureTaskDirs } from "../../src/core/tasks.js";
 
 describe("exportFile", () => {
   let tempDir: string;
@@ -95,5 +96,65 @@ describe("getExportPreamble", () => {
   it("tells LLM to preserve KEEP elements", () => {
     const preamble = getExportPreamble();
     expect(preamble).toContain("NEVER modify");
+  });
+});
+
+describe("exportTasks", () => {
+  let tempDir: string;
+
+  beforeEach(() => {
+    tempDir = mkdtempSync(join(tmpdir(), "proto-export-tasks-"));
+  });
+
+  afterEach(() => {
+    rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  it("exports tasks as an LLM prompt", () => {
+    createTask(tempDir, {
+      title: "Fix header",
+      description: "Make it sticky",
+      status: "todo",
+      priority: "high",
+      tag: "TODO",
+      selector: '[data-proto-id="header"]',
+    });
+
+    const result = exportTasks(tempDir);
+    expect(result.taskCount).toBe(1);
+    expect(result.prompt).toContain("Fix header");
+    expect(result.prompt).toContain("TODO");
+    expect(result.prompt).toContain("Active Tasks");
+  });
+
+  it("excludes done tasks from active count", () => {
+    createTask(tempDir, {
+      title: "Done task",
+      description: "",
+      status: "done",
+      priority: "low",
+      tag: "TODO",
+      selector: '[data-proto-id="done"]',
+    });
+    createTask(tempDir, {
+      title: "Active task",
+      description: "",
+      status: "todo",
+      priority: "medium",
+      tag: "FEATURE",
+      selector: '[data-proto-id="active"]',
+    });
+
+    const result = exportTasks(tempDir);
+    expect(result.taskCount).toBe(1);
+    expect(result.tasks).toHaveLength(1);
+    expect(result.tasks[0].title).toBe("Active task");
+  });
+
+  it("returns empty prompt when no tasks exist", () => {
+    ensureTaskDirs(tempDir);
+    const result = exportTasks(tempDir);
+    expect(result.taskCount).toBe(0);
+    expect(result.prompt).toContain("No active tasks");
   });
 });

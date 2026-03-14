@@ -3,7 +3,6 @@ import {
   mkdtempSync,
   rmSync,
   writeFileSync,
-  readFileSync,
 } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -85,13 +84,144 @@ describe("proto serve (e2e)", () => {
     expect(await page2.text()).toContain("Page Two");
   });
 
-  it("accepts annotations via POST /api/annotate", async () => {
-    const filePath = join(tempDir, "annotate-test.html");
+  // ── Task API tests ──────────────────────────────────────────────────────
+  it("GET /api/tasks returns empty list initially", async () => {
+    const filePath = join(tempDir, "test.html");
     writeFileSync(filePath, SAMPLE_HTML, "utf-8");
 
     instance = await serve(filePath, { port: 3753, open: false });
 
-    const response = await fetch("http://localhost:3753/api/annotate", {
+    const response = await fetch("http://localhost:3753/api/tasks");
+    expect(response.ok).toBe(true);
+    const data = await response.json();
+    expect(data.tasks).toEqual([]);
+  });
+
+  it("POST /api/tasks creates a task", async () => {
+    const filePath = join(tempDir, "test.html");
+    writeFileSync(filePath, SAMPLE_HTML, "utf-8");
+
+    instance = await serve(filePath, { port: 3754, open: false });
+
+    const response = await fetch("http://localhost:3754/api/tasks", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title: "Fix the button",
+        description: "Make it bigger",
+        tag: "TODO",
+        selector: '[data-proto-id="cta-button"]',
+        priority: "high",
+      }),
+    });
+
+    const result = await response.json();
+    expect(result.success).toBe(true);
+    expect(result.task.id).toBeDefined();
+    expect(result.task.title).toBe("Fix the button");
+    expect(result.task.tag).toBe("TODO");
+
+    // Verify it appears in the list
+    const listRes = await fetch("http://localhost:3754/api/tasks");
+    const listData = await listRes.json();
+    expect(listData.tasks).toHaveLength(1);
+  });
+
+  it("POST /api/tasks rejects missing fields", async () => {
+    const filePath = join(tempDir, "test.html");
+    writeFileSync(filePath, SAMPLE_HTML, "utf-8");
+
+    instance = await serve(filePath, { port: 3755, open: false });
+
+    const response = await fetch("http://localhost:3755/api/tasks", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: "No selector" }),
+    });
+
+    expect(response.status).toBe(400);
+  });
+
+  it("PATCH /api/tasks/:id updates a task", async () => {
+    const filePath = join(tempDir, "test.html");
+    writeFileSync(filePath, SAMPLE_HTML, "utf-8");
+
+    instance = await serve(filePath, { port: 3756, open: false });
+
+    // Create a task first
+    const createRes = await fetch("http://localhost:3756/api/tasks", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title: "Update me",
+        tag: "TODO",
+        selector: '[data-proto-id="hero-section"]',
+      }),
+    });
+    const { task } = await createRes.json();
+
+    // Update it
+    const updateRes = await fetch(`http://localhost:3756/api/tasks/${task.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: "done" }),
+    });
+
+    const updateData = await updateRes.json();
+    expect(updateData.success).toBe(true);
+    expect(updateData.task.status).toBe("done");
+  });
+
+  it("DELETE /api/tasks/:id removes a task", async () => {
+    const filePath = join(tempDir, "test.html");
+    writeFileSync(filePath, SAMPLE_HTML, "utf-8");
+
+    instance = await serve(filePath, { port: 3757, open: false });
+
+    // Create then delete
+    const createRes = await fetch("http://localhost:3757/api/tasks", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title: "Delete me",
+        tag: "FEATURE",
+        selector: '[data-proto-id="main-title"]',
+      }),
+    });
+    const { task } = await createRes.json();
+
+    const deleteRes = await fetch(`http://localhost:3757/api/tasks/${task.id}`, {
+      method: "DELETE",
+    });
+    expect(deleteRes.ok).toBe(true);
+
+    const listRes = await fetch("http://localhost:3757/api/tasks");
+    const listData = await listRes.json();
+    expect(listData.tasks).toHaveLength(0);
+  });
+
+  it("PATCH /api/tasks/:id returns 404 for non-existent task", async () => {
+    const filePath = join(tempDir, "test.html");
+    writeFileSync(filePath, SAMPLE_HTML, "utf-8");
+
+    instance = await serve(filePath, { port: 3758, open: false });
+
+    const response = await fetch("http://localhost:3758/api/tasks/nonexist", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: "done" }),
+    });
+    expect(response.status).toBe(404);
+  });
+
+  // ── Legacy annotation API ───────────────────────────────────────────────
+  it("accepts annotations via POST /api/annotate (creates task)", async () => {
+    const filePath = join(tempDir, "annotate-test.html");
+    writeFileSync(filePath, SAMPLE_HTML, "utf-8");
+
+    instance = await serve(filePath, { port: 3759, open: false });
+
+    const response = await fetch("http://localhost:3759/api/annotate", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -104,19 +234,17 @@ describe("proto serve (e2e)", () => {
 
     const result = await response.json();
     expect(result.success).toBe(true);
-
-    const updatedHtml = readFileSync(filePath, "utf-8");
-    expect(updatedHtml).toContain("@TODO");
-    expect(updatedHtml).toContain("Make this button bigger");
+    expect(result.task).toBeDefined();
+    expect(result.task.title).toContain("Make this button bigger");
   });
 
   it("rejects annotation with missing fields", async () => {
     const filePath = join(tempDir, "test.html");
     writeFileSync(filePath, SAMPLE_HTML, "utf-8");
 
-    instance = await serve(filePath, { port: 3754, open: false });
+    instance = await serve(filePath, { port: 3760, open: false });
 
-    const response = await fetch("http://localhost:3754/api/annotate", {
+    const response = await fetch("http://localhost:3760/api/annotate", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ file: "test.html" }),
@@ -129,9 +257,9 @@ describe("proto serve (e2e)", () => {
     const filePath = join(tempDir, "test.html");
     writeFileSync(filePath, SAMPLE_HTML, "utf-8");
 
-    instance = await serve(filePath, { port: 3755, open: false });
+    instance = await serve(filePath, { port: 3761, open: false });
 
-    const response = await fetch("http://localhost:3755/api/annotate", {
+    const response = await fetch("http://localhost:3761/api/annotate", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -149,10 +277,21 @@ describe("proto serve (e2e)", () => {
     const emptyDir = mkdtempSync(join(tmpdir(), "proto-empty-"));
     try {
       await expect(
-        serve(emptyDir, { port: 3756, open: false }),
+        serve(emptyDir, { port: 3762, open: false }),
       ).rejects.toThrow("No HTML files");
     } finally {
       rmSync(emptyDir, { recursive: true, force: true });
     }
+  });
+
+  it("creates .proto directory on startup", async () => {
+    const filePath = join(tempDir, "test.html");
+    writeFileSync(filePath, SAMPLE_HTML, "utf-8");
+
+    instance = await serve(filePath, { port: 3763, open: false });
+
+    const { existsSync } = await import("node:fs");
+    expect(existsSync(join(tempDir, ".proto", "tasks"))).toBe(true);
+    expect(existsSync(join(tempDir, ".proto", "screenshots"))).toBe(true);
   });
 });

@@ -3,7 +3,8 @@ import { resolve, basename } from "node:path";
 import chalk from "chalk";
 import { parseAnnotations, countAnnotationsByTag } from "../core/annotations.js";
 import { findHtmlFiles } from "../core/html-parser.js";
-import type { ExportResult, DirectoryExportResult } from "../core/types.js";
+import { listTasks } from "../core/tasks.js";
+import type { ExportResult, DirectoryExportResult, TaskExportResult } from "../core/types.js";
 
 const EXPORT_PREAMBLE = `You are reviewing an annotated HTML prototype. Each file contains inline
 annotation comments that describe changes, additions, and constraints.
@@ -130,4 +131,66 @@ export function isDirectory(targetPath: string): boolean {
   } catch {
     return false;
   }
+}
+
+const TASK_EXPORT_PREAMBLE = `You are reviewing a project with annotated tasks. Each task describes a change,
+feature, or question about a specific UI element identified by its CSS selector.
+
+## Task Statuses
+
+| Status | Meaning |
+|--------|---------|
+| todo | Not started — implement this |
+| in-progress | Being worked on |
+| done | Completed — skip |
+
+## Task Tags
+
+| Tag | Meaning | Your Action |
+|-----|---------|-------------|
+| TODO | Change needed | Implement the change |
+| FEATURE | New feature | Add the feature |
+| VARIANT | Alternative version | Generate alternative |
+| KEEP | Do not modify | Leave unchanged |
+| QUESTION | Question for you | Answer in your response |
+| CONTEXT | Background info | Use as design context |
+
+## Rules
+
+1. Implement every TODO and FEATURE task with status "todo"
+2. NEVER modify elements referenced by KEEP tasks
+3. Preserve ALL data-proto-id attributes
+4. Write the complete updated file(s)
+
+---
+
+`;
+
+export function exportTasks(projectDir: string): TaskExportResult {
+  const absPath = resolve(projectDir);
+  const tasks = listTasks(absPath);
+  const activeTasks = tasks.filter((t) => t.status !== "done");
+
+  const taskBlocks = activeTasks
+    .map(
+      (t, i) =>
+        `### Task ${i + 1}: [${t.tag}] ${t.title}\n` +
+        `- **Status:** ${t.status}\n` +
+        `- **Priority:** ${t.priority}\n` +
+        `- **Selector:** \`${t.selector}\`\n` +
+        (t.url ? `- **URL:** ${t.url}\n` : "") +
+        (t.description ? `\n${t.description}\n` : ""),
+    )
+    .join("\n---\n\n");
+
+  const prompt =
+    TASK_EXPORT_PREAMBLE +
+    `## Active Tasks (${activeTasks.length} of ${tasks.length} total)\n\n` +
+    (activeTasks.length === 0 ? "No active tasks.\n" : taskBlocks);
+
+  console.log(chalk.green(`✓ Export ready: ${activeTasks.length} active tasks`));
+  console.log(chalk.dim(`  Total tasks: ${tasks.length}`));
+  console.log(chalk.dim(`  Done: ${tasks.length - activeTasks.length}`));
+
+  return { prompt, taskCount: activeTasks.length, tasks: activeTasks };
 }

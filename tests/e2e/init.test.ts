@@ -34,6 +34,22 @@ describe("proto init (e2e)", () => {
     expect(existsSync(join(tempDir, "prototype-rules.md"))).toBe(true);
   });
 
+  it("creates .proto directory with tasks and screenshots", () => {
+    run(`init ${tempDir}`);
+    expect(existsSync(join(tempDir, ".proto"))).toBe(true);
+    expect(existsSync(join(tempDir, ".proto", "tasks"))).toBe(true);
+    expect(existsSync(join(tempDir, ".proto", "screenshots"))).toBe(true);
+  });
+
+  it("creates .proto/config.json", () => {
+    run(`init ${tempDir}`);
+    const configPath = join(tempDir, ".proto", "config.json");
+    expect(existsSync(configPath)).toBe(true);
+    const config = JSON.parse(readFileSync(configPath, "utf-8"));
+    expect(config.mode).toBe("prototype");
+    expect(config.port).toBe(3700);
+  });
+
   it("creates copilot instructions file", () => {
     run(`init ${tempDir}`);
     const copilotFile = join(
@@ -85,12 +101,13 @@ describe("proto init (e2e)", () => {
     expect(pkg.name).toBe("prototypes");
   });
 
-  it("creates .gitignore with node_modules", () => {
+  it("creates .gitignore with node_modules and .proto/screenshots", () => {
     run(`init ${tempDir}`);
     const gitignorePath = join(tempDir, ".gitignore");
     expect(existsSync(gitignorePath)).toBe(true);
     const content = readFileSync(gitignorePath, "utf-8");
     expect(content).toContain("node_modules");
+    expect(content).toContain(".proto/screenshots/");
   });
 
   it("creates starter index.html with Tailwind and proto-ids", () => {

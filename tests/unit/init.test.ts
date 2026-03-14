@@ -15,6 +15,22 @@ describe("initProject", () => {
     rmSync(tempDir, { recursive: true, force: true });
   });
 
+  it("creates .proto directory with tasks and screenshots subdirs", () => {
+    initProject(tempDir);
+    expect(existsSync(join(tempDir, ".proto"))).toBe(true);
+    expect(existsSync(join(tempDir, ".proto", "tasks"))).toBe(true);
+    expect(existsSync(join(tempDir, ".proto", "screenshots"))).toBe(true);
+  });
+
+  it("creates .proto/config.json with prototype mode", () => {
+    initProject(tempDir);
+    const configPath = join(tempDir, ".proto", "config.json");
+    expect(existsSync(configPath)).toBe(true);
+    const config = JSON.parse(readFileSync(configPath, "utf-8"));
+    expect(config.mode).toBe("prototype");
+    expect(config.port).toBe(3700);
+  });
+
   it("creates prototype-rules.md in target directory", () => {
     const result = initProject(tempDir);
     const rulesPath = join(tempDir, "prototype-rules.md");
@@ -61,16 +77,23 @@ describe("initProject", () => {
     expect(content).toContain("*.html");
   });
 
-  it("returns 5 created files on fresh init", () => {
+  it("returns created files including .proto on fresh init", () => {
     const result = initProject(tempDir);
-    expect(result.files).toHaveLength(5);
+    expect(result.files.length).toBeGreaterThanOrEqual(5);
+    expect(result.files).toContainEqual(join(tempDir, ".proto"));
   });
 
   it("is idempotent (can be run twice)", () => {
     initProject(tempDir);
     const result = initProject(tempDir);
-    // second run: package.json, .gitignore, index.html already exist so only rules + copilot recreated
-    expect(result.files).toHaveLength(2);
+    // second run: package.json, .gitignore, index.html already exist so only .proto + rules + copilot recreated
+    expect(result.files).toHaveLength(3);
+  });
+
+  it(".gitignore includes .proto/screenshots/", () => {
+    initProject(tempDir);
+    const content = readFileSync(join(tempDir, ".gitignore"), "utf-8");
+    expect(content).toContain(".proto/screenshots/");
   });
 });
 

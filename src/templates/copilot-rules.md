@@ -7,9 +7,11 @@ applyTo: "**/*.html"
 
 When generating HTML prototypes:
 
-1. Add `data-proto-id` (kebab-case, unique, stable) to every meaningful element
-2. Keep files self-contained — inline styles and scripts, no external dependencies
-3. Include `<meta charset="UTF-8">` and viewport meta tag
-4. Process annotation comments: implement `@TODO`/`@FEATURE` and remove them,
-   never modify `@KEEP` elements, answer `@QUESTION` with `@CONTEXT`
-5. Never rename or remove existing `data-proto-id` attributes
+1. **One screen per file** — name files after their route (login.html, dashboard.html, etc.)
+2. **Tailwind CSS via CDN** — add `<script src="https://cdn.tailwindcss.com"></script>` in head; use utility classes for all styling
+3. **Lucide icons via CDN** — `<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>` and call `lucide.createIcons()`
+4. **Google Fonts** — Inter via `https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap`
+5. **data-proto-id** (kebab-case, stable, unique per file and globally across files) on every meaningful element
+6. **Navigation** — use relative `<a href="./page.html">` links; repeat nav verbatim in every file
+7. **Process annotations** — implement `@TODO`/`@FEATURE` and remove them, never modify `@KEEP`, answer `@QUESTION` with `@CONTEXT`
+8. Never rename or remove existing `data-proto-id` attributes

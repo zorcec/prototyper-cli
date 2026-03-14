@@ -1,9 +1,12 @@
 import { Command } from "commander";
 import { initProject } from "./commands/init.js";
+import { attachProject } from "./commands/attach.js";
 import { serve } from "./server/server.js";
-import { exportFile, exportDirectory, isDirectory as isDir } from "./commands/export.js";
+import { exportFile, exportDirectory, exportTasks, isDirectory as isDir } from "./commands/export.js";
 import { validateFile, validateDirectory, isDirectory as isDir2 } from "./commands/validate.js";
+import { listTasks } from "./core/tasks.js";
 import { writeFileSync } from "node:fs";
+import chalk from "chalk";
 
 const program = new Command();
 
@@ -17,7 +20,7 @@ program
 program
   .command("init")
   .description(
-    "Initialize project with annotation rules and Copilot instructions",
+    "Initialize a new prototype project with rules, instructions, and .proto/ task directory",
   )
   .argument("[dir]", "Target directory", ".")
   .action((dir: string) => {
@@ -25,8 +28,19 @@ program
   });
 
 program
+  .command("attach")
+  .description(
+    "Attach Proto Studio to an existing project for annotating a live webapp",
+  )
+  .argument("[dir]", "Project root directory", ".")
+  .option("-u, --url <url>", "Webapp URL to annotate", "http://localhost:3000")
+  .action((dir: string, opts: { url: string }) => {
+    attachProject(dir, opts.url);
+  });
+
+program
   .command("serve")
-  .description("Serve HTML prototype(s) with live annotation overlay")
+  .description("Serve HTML prototype(s) or task API server with overlay")
   .argument("<target>", "HTML file or directory containing HTML files")
   .option("-p, --port <port>", "Port number", "3700")
   .option("--no-open", "Do not open browser automatically")
@@ -40,19 +54,23 @@ program
 program
   .command("export")
   .description(
-    "Export annotated HTML file(s) as a ready-to-paste LLM prompt. Accepts a file or directory.",
+    "Export annotated HTML file(s) or tasks as a ready-to-paste LLM prompt",
   )
-  .argument("<target>", "HTML file or directory of HTML files")
+  .argument("<target>", "HTML file, directory, or project root with .proto/ tasks")
   .option("-c, --clipboard", "Copy to clipboard", false)
   .option("-o, --output <file>", "Write prompt to file")
+  .option("--tasks", "Export tasks instead of HTML annotations", false)
   .action(
     async (
       target: string,
-      opts: { clipboard: boolean; output?: string },
+      opts: { clipboard: boolean; output?: string; tasks: boolean },
     ) => {
       let prompt: string;
 
-      if (isDir(target)) {
+      if (opts.tasks) {
+        const result = exportTasks(target);
+        prompt = result.prompt;
+      } else if (isDir(target)) {
         const result = exportDirectory(target);
         prompt = result.prompt;
       } else {
@@ -80,7 +98,7 @@ program
 program
   .command("validate")
   .description(
-    "Validate HTML prototype(s) against the annotation contract. Accepts a file or directory.",
+    "Validate HTML prototype(s) against the annotation contract",
   )
   .argument("<target>", "HTML file or directory of HTML files")
   .option(
@@ -95,6 +113,48 @@ program
       const result = validateFile(target, opts.previous);
       process.exitCode = result.valid ? 0 : 1;
     }
+  });
+
+program
+  .command("tasks")
+  .description("List all tasks in the project")
+  .argument("[dir]", "Project root directory", ".")
+  .option("--status <status>", "Filter by status (todo, in-progress, done)")
+  .action((dir: string, opts: { status?: string }) => {
+    const tasks = listTasks(dir);
+    let filtered = tasks;
+    if (opts.status) {
+      filtered = tasks.filter((t) => t.status === opts.status);
+    }
+
+    if (filtered.length === 0) {
+      console.log(chalk.dim("No tasks found."));
+      return;
+    }
+
+    const statusColors: Record<string, (s: string) => string> = {
+      todo: chalk.yellow,
+      "in-progress": chalk.blue,
+      done: chalk.green,
+    };
+
+    for (const task of filtered) {
+      const colorFn = statusColors[task.status] || chalk.white;
+      console.log(
+        `  ${colorFn(`[${task.status}]`)} ${chalk.red(`@${task.tag}`)} ${task.title}`,
+      );
+      console.log(chalk.dim(`    ${task.selector} (${task.id})`));
+    }
+
+    const todoCount = tasks.filter((t) => t.status === "todo").length;
+    const inProgressCount = tasks.filter((t) => t.status === "in-progress").length;
+    const doneCount = tasks.filter((t) => t.status === "done").length;
+    console.log();
+    console.log(
+      chalk.dim(
+        `  Total: ${tasks.length} | Todo: ${todoCount} | In Progress: ${inProgressCount} | Done: ${doneCount}`,
+      ),
+    );
   });
 
 program.parse();

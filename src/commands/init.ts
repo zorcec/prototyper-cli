@@ -2,6 +2,9 @@ import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { execSync } from "node:child_process";
 import { join } from "node:path";
 import chalk from "chalk";
+import { ensureTaskDirs } from "../core/tasks.js";
+import { writeConfig } from "../core/config.js";
+import type { ProtoConfig } from "../core/types.js";
 
 export const RULES_TEMPLATE = `# Prototype Studio — Annotation Contract
 
@@ -287,6 +290,12 @@ const STARTER_HTML_TEMPLATE = `<!DOCTYPE html>
 export function initProject(targetDir: string): { files: string[] } {
   const created: string[] = [];
 
+  // Create .proto/ task directories
+  ensureTaskDirs(targetDir);
+  const config: ProtoConfig = { mode: "prototype", port: 3700 };
+  writeConfig(targetDir, config);
+  created.push(join(targetDir, ".proto"));
+
   const rulesPath = join(targetDir, "prototype-rules.md");
   writeFileSync(rulesPath, RULES_TEMPLATE, "utf-8");
   created.push(rulesPath);
@@ -305,7 +314,7 @@ export function initProject(targetDir: string): { files: string[] } {
 
   const gitignorePath = join(targetDir, ".gitignore");
   if (!existsSync(gitignorePath)) {
-    writeFileSync(gitignorePath, "node_modules/\n", "utf-8");
+    writeFileSync(gitignorePath, "node_modules/\n.proto/screenshots/\n", "utf-8");
     created.push(gitignorePath);
   }
 

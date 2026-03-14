@@ -8,5 +8,5 @@ Make an chrome extension that would allow us to annotate the real webpage/produc
 - open sidebar when mouse touches the right edge of the screen, and close it when mouse leaves the sidebar area. This way we can have a quick access to the tasks and the UI without having to click on anything. We can also use this feature to make the UI more intuitive and user-friendly.
 - add right mouse click context menu to add a new task for the element that was right-clicked. This way we can quickly add tasks for specific elements on the page without having to open the sidebar and navigate through the UI. We can also use this feature to make the task creation process more efficient and seamless.
 - use the same taks save system for the pure prototype as well, when prototype is served by CLI (in general, both things should work the same way, the new way, no more HTML comments)
-- make sure the prototype is isolated with shadow dom correctly, and al lis readable (no more white on white)
+- make sure the prototype is isolated with shadow dom correctly, and all is readable (no more white on white)
 - make layout dark themed

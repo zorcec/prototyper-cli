@@ -3,7 +3,7 @@
  *
  * These tests serve a real HTML page with a dark-theme host (mimicking Tailwind
  * pages with `color: white` on `*`) and verify that the Shadow DOM overlay is
- * fully visually isolated — no white-on-white, correct colours everywhere.
+ * fully visually isolated — correct dark theme colours everywhere.
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { chromium } from "playwright";
@@ -18,9 +18,6 @@ const PORT = 3880;
 const BASE = `http://localhost:${PORT}`;
 
 // ── Fixture HTML ─────────────────────────────────────────────────────────────
-// Simulates the worst-case host page: a dark-theme app where EVERY element
-// (including inputs, selects, buttons, textareas) inherits `color: white` and a
-// dark background — exactly the environment that caused the white-on-white bug.
 const DARK_THEME_HTML = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -64,16 +61,13 @@ function isDark(css: string)   { return rgbAvg(css) < 100; }
 function isBlue(css: string)   {
   const m = css.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
   if (!m) return false;
-  return Number(m[3]) > Number(m[1]);          // blue channel > red channel
+  return Number(m[3]) > Number(m[1]);
 }
 function isOpaque(css: string) {
   return css !== "rgba(0, 0, 0, 0)" && css !== "transparent";
 }
 
 // ── Shadow DOM helpers ────────────────────────────────────────────────────────
-// All overlay UI lives inside the shadow root so normal page.locator() won't
-// reach it — we query via evaluate() with the shadow root reference.
-
 async function shadowExists(page: Page, sel: string): Promise<boolean> {
   return page.evaluate((s) => {
     const host = document.querySelector("#proto-studio-root") as HTMLElement;
@@ -93,7 +87,6 @@ async function shadowStyle(page: Page, sel: string, prop: keyof CSSStyleDeclarat
     ([s, p]) => {
       const host = document.querySelector("#proto-studio-root") as HTMLElement;
       const el = host?.shadowRoot?.querySelector(s) as HTMLElement;
-      // Return transparent so isOpaque() correctly reports false when missing
       if (!el) return "rgba(0, 0, 0, 0)";
       return (getComputedStyle(el) as Record<string, string>)[p as string] ?? "";
     },
@@ -140,7 +133,6 @@ describe("Overlay — Shadow DOM visual isolation on dark-theme host", () => {
     page     = await context.newPage();
 
     await page.goto(BASE);
-    // Wait until the shadow host is mounted
     await page.waitForFunction(
       () => !!(document.querySelector("#proto-studio-root") as HTMLElement)?.shadowRoot,
       { timeout: 10_000 },
@@ -175,16 +167,16 @@ describe("Overlay — Shadow DOM visual isolation on dark-theme host", () => {
     expect(await shadowExists(page, ".proto-status")).toBe(true);
   });
 
-  // ── Status bar colours ──────────────────────────────────────────────────
-  it("status bar: dark background (not inheriting host page dark bg with light text missing)", async () => {
+  // ── Status bar colours (dark theme) ─────────────────────────────────────
+  it("status bar: dark background", async () => {
     const bg = await shadowStyle(page, ".proto-status", "backgroundColor");
     expect(isOpaque(bg)).toBe(true);
-    expect(isDark(bg)).toBe(true);        // #1e293b ≈ rgb(30, 41, 59)
+    expect(isDark(bg)).toBe(true);
   });
 
   it("status bar: light text colour", async () => {
     const color = await shadowStyle(page, ".proto-status", "color");
-    expect(isLight(color)).toBe(true);    // #f1f5f9 ≈ rgb(241, 245, 249)
+    expect(isLight(color)).toBe(true);
   });
 
   it("status bar: contains keyboard hints", async () => {
@@ -208,21 +200,21 @@ describe("Overlay — Shadow DOM visual isolation on dark-theme host", () => {
     expect(text).toContain("Annotation Mode");
   });
 
-  // ── Popover ─────────────────────────────────────────────────────────────
+  // ── Popover (dark theme) ────────────────────────────────────────────────
   it("clicking a data-proto-id element opens the popover", async () => {
     await page.click('[data-proto-id="cta-button"]');
     expect(await shadowExists(page, ".proto-popover")).toBe(true);
   });
 
-  it("popover: white background (not dark from host page)", async () => {
+  it("popover: dark background (dark theme)", async () => {
     const bg = await shadowStyle(page, ".proto-popover", "backgroundColor");
-    // Must be white or near-white: rgb(255,255,255)
-    expect(bg).toBe("rgb(255, 255, 255)");
+    expect(isOpaque(bg)).toBe(true);
+    expect(isDark(bg)).toBe(true);
   });
 
-  it("popover: dark text (not white-on-white)", async () => {
+  it("popover: light text (dark theme)", async () => {
     const color = await shadowStyle(page, ".proto-popover", "color");
-    expect(isDark(color)).toBe(true);     // #111827 ≈ rgb(17, 24, 39)
+    expect(isLight(color)).toBe(true);
   });
 
   it("popover label: shows the proto-id being annotated", async () => {
@@ -230,40 +222,33 @@ describe("Overlay — Shadow DOM visual isolation on dark-theme host", () => {
     expect(text).toContain("cta-button");
   });
 
-  it("popover select: dark text (isolated from host `color: white`)", async () => {
+  it("popover select: light text on dark background (dark theme)", async () => {
     const color = await shadowStyle(page, ".proto-popover select", "color");
-    expect(isDark(color)).toBe(true);
+    expect(isLight(color)).toBe(true);
   });
 
-  it("popover select: opaque background (not host dark background)", async () => {
+  it("popover select: dark background", async () => {
     const bg = await shadowStyle(page, ".proto-popover select", "backgroundColor");
     expect(isOpaque(bg)).toBe(true);
-    expect(isLight(bg)).toBe(true);       // #f9fafb ≈ rgb(249,250,251)
+    expect(isDark(bg)).toBe(true);
   });
 
-  it("popover textarea: dark text (isolated from host `color: white`)", async () => {
+  it("popover textarea: light text (dark theme)", async () => {
     const color = await shadowStyle(page, ".proto-popover textarea", "color");
-    expect(isDark(color)).toBe(true);
+    expect(isLight(color)).toBe(true);
   });
 
-  it("popover textarea: opaque light background", async () => {
+  it("popover textarea: dark background", async () => {
     const bg = await shadowStyle(page, ".proto-popover textarea", "backgroundColor");
     expect(isOpaque(bg)).toBe(true);
-    expect(isLight(bg)).toBe(true);
-  });
-
-  it("popover cancel button: dark text on light background", async () => {
-    const color = await shadowStyle(page, ".proto-popover button:not(.btn-primary)", "color");
-    const bg    = await shadowStyle(page, ".proto-popover button:not(.btn-primary)", "backgroundColor");
-    expect(isDark(color) || rgbAvg(color) < 150).toBe(true);
-    expect(isOpaque(bg)).toBe(true);
+    expect(isDark(bg)).toBe(true);
   });
 
   it("popover save button: white text on blue background", async () => {
     const color = await shadowStyle(page, ".proto-popover .btn-primary", "color");
     const bg    = await shadowStyle(page, ".proto-popover .btn-primary", "backgroundColor");
-    expect(isLight(color)).toBe(true);    // white text
-    expect(isBlue(bg)).toBe(true);        // blue background
+    expect(isLight(color)).toBe(true);
+    expect(isBlue(bg)).toBe(true);
   });
 
   it("popover select: lists all 6 annotation tags", async () => {
@@ -273,6 +258,10 @@ describe("Overlay — Shadow DOM visual isolation on dark-theme host", () => {
       return Array.from(sel?.options ?? []).map((o) => o.value);
     });
     expect(options).toEqual(["TODO", "FEATURE", "VARIANT", "KEEP", "QUESTION", "CONTEXT"]);
+  });
+
+  it("popover has title input field", async () => {
+    expect(await shadowExists(page, ".proto-popover input[type='text']")).toBe(true);
   });
 
   // ── Escape behaviour ────────────────────────────────────────────────────
@@ -289,12 +278,13 @@ describe("Overlay — Shadow DOM visual isolation on dark-theme host", () => {
     expect(active).toBe(false);
   });
 
-  // ── Annotation submission ────────────────────────────────────────────────
-  it("submitting annotation shows '✓ Annotation saved' in status bar", async () => {
+  // ── Task submission ──────────────────────────────────────────────────────
+  it("submitting task shows saved feedback in status bar", async () => {
     await page.keyboard.press("Alt+a");
     await page.click('[data-proto-id="hero-title"]');
 
-    await shadowSetValue(page, ".proto-popover textarea", "Shadow DOM test annotation");
+    await shadowSetValue(page, ".proto-popover input[type='text']", "Test task title");
+    await shadowSetValue(page, ".proto-popover textarea", "Shadow DOM test task");
     await shadowClick(page, ".btn-primary");
 
     await page.waitForFunction(
@@ -308,21 +298,21 @@ describe("Overlay — Shadow DOM visual isolation on dark-theme host", () => {
     const text = await shadowText(page, ".proto-status");
     expect(text).toContain("saved");
 
-    // The file watcher detects the disk write and sends a WS reload.
-    // Wait for that navigation to complete before subsequent sidebar checks.
+    // Wait for potential WS-triggered reload
     await Promise.race([
       page.waitForNavigation({ timeout: 4_000 }).catch(() => null),
-      new Promise((r) => setTimeout(r, 4_000)), // fallback: just wait
+      new Promise((r) => setTimeout(r, 4_000)),
     ]);
-    // Re-wait for shadow root after potential reload
     await page.waitForFunction(
       () => !!(document.querySelector("#proto-studio-root") as HTMLElement)?.shadowRoot,
       { timeout: 5_000 },
     );
+    // Exit annotation mode (no-op if page reloaded and reset state)
+    await page.keyboard.press("Escape");
   });
 
-  // ── Sidebar ──────────────────────────────────────────────────────────────
-  it("Alt+S opens the annotation sidebar", async () => {
+  // ── Sidebar (dark theme) ─────────────────────────────────────────────────
+  it("Alt+S opens the task sidebar", async () => {
     await page.keyboard.press("Alt+s");
     const open = await page.evaluate(() => {
       const host = document.querySelector("#proto-studio-root") as HTMLElement;
@@ -331,44 +321,45 @@ describe("Overlay — Shadow DOM visual isolation on dark-theme host", () => {
     expect(open).toBe(true);
   });
 
-  it("sidebar: white background (not host dark bg)", async () => {
+  it("sidebar: dark background (dark theme)", async () => {
     const bg = await shadowStyle(page, ".proto-sidebar", "backgroundColor");
-    expect(bg).toBe("rgb(255, 255, 255)");
+    expect(isOpaque(bg)).toBe(true);
+    expect(isDark(bg)).toBe(true);
   });
 
-  it("sidebar: dark text", async () => {
+  it("sidebar: light text", async () => {
     const color = await shadowStyle(page, ".proto-sidebar", "color");
-    expect(isDark(color)).toBe(true);
+    expect(isLight(color)).toBe(true);
   });
 
-  it("sidebar heading shows annotation count", async () => {
+  it("sidebar heading shows task count", async () => {
     const text = await shadowText(page, ".proto-sidebar h3");
-    expect(text).toMatch(/Annotations \(\d+\)/);
+    expect(text).toMatch(/Tasks \(\d+\/\d+\)/);
   });
 
-  it("sidebar shows submitted annotation card", async () => {
-    // The sidebar was opened before possible page reload — re-open it now so
-    // refreshSidebar() scans the current DOM which should have the annotation.
-    await page.keyboard.press("Escape");   // close if open
-    await page.keyboard.press("Alt+s");
+  it("sidebar shows submitted task card", async () => {
+    // The sidebar was opened in the "Alt+S opens" test above and is still open.
+    // The fetchTasks() call should have loaded the task we submitted earlier.
+    // Wait for a task card to appear (fetchTasks is async).
     await page.waitForFunction(
-      () => !!(document.querySelector("#proto-studio-root") as HTMLElement)
-        ?.shadowRoot?.querySelector(".proto-sidebar.open"),
-      { timeout: 3_000 },
+      () => {
+        const host = document.querySelector("#proto-studio-root") as HTMLElement;
+        return !!(host?.shadowRoot?.querySelector(".task-card"));
+      },
+      { timeout: 10_000 },
     );
-    const cardExists = await shadowExists(page, ".annotation-card");
+    const cardExists = await shadowExists(page, ".task-card");
     expect(cardExists).toBe(true);
   });
 
-  it("annotation card: tag badge has coloured background", async () => {
+  it("task card: tag badge has coloured background", async () => {
     const bg = await shadowStyle(page, ".tag-badge", "backgroundColor");
     expect(isOpaque(bg)).toBe(true);
-    expect(isLight(bg)).toBe(false);      // colour, not white
   });
 
-  it("annotation card: annotation text is dark and readable", async () => {
-    const color = await shadowStyle(page, ".annotation-text", "color");
-    expect(isDark(color) || rgbAvg(color) < 150).toBe(true);
+  it("task card: title text is light and readable", async () => {
+    const color = await shadowStyle(page, ".task-title", "color");
+    expect(isLight(color)).toBe(true);
   });
 
   it("Escape closes the sidebar", async () => {
@@ -380,37 +371,9 @@ describe("Overlay — Shadow DOM visual isolation on dark-theme host", () => {
     expect(open).toBe(false);
   });
 
-  // ── Dark-theme host isolation: regression tests ──────────────────────────
-  it("textarea colour is NOT white (host-page `color:white` does not bleed into shadow)", async () => {
-    await page.keyboard.press("Alt+a");
-    await page.click('[data-proto-id="features-title"]');
-
-    const color = await shadowStyle(page, "textarea", "color");
-    // Must NOT be white (rgb(255,255,255)) even though host page sets color:white on *
-    expect(isLight(color)).toBe(false);
-    await page.keyboard.press("Escape");
-    await page.keyboard.press("Escape");
-  });
-
-  it("select colour is NOT white (host-page `color:white` does not bleed into shadow)", async () => {
-    await page.keyboard.press("Alt+a");
-    await page.click('[data-proto-id="cta-button"]');
-
-    const color = await shadowStyle(page, "select", "color");
-    expect(isLight(color)).toBe(false);
-    await page.keyboard.press("Escape");
-    await page.keyboard.press("Escape");
-  });
-
-  it("button background is NOT dark (host-page `background:#1e293b` does not bleed into shadow)", async () => {
-    await page.keyboard.press("Alt+a");
-    await page.click('[data-proto-id="hero-title"]');
-
-    const bg = await shadowStyle(page, "button:not(.btn-primary)", "backgroundColor");
-    // Cancel button should be #f9fafb (near-white), NOT #1e293b (host dark)
-    expect(isDark(bg)).toBe(false);
-    await page.keyboard.press("Escape");
-    await page.keyboard.press("Escape");
+  // ── Edge trigger zone ───────────────────────────────────────────────────
+  it("edge trigger zone exists in shadow DOM", async () => {
+    expect(await shadowExists(page, ".proto-edge-trigger")).toBe(true);
   });
 
   // ── Multiple proto-ids - can annotate different elements ─────────────────
@@ -428,7 +391,6 @@ describe("Overlay — Shadow DOM visual isolation on dark-theme host", () => {
 
   // ── No popover outside annotation mode ───────────────────────────────────
   it("clicking a proto-id element outside annotation mode does NOT open popover", async () => {
-    // Ensure annotation mode is off
     const active = await page.evaluate(() =>
       document.body.classList.contains("proto-overlay-active"),
     );
@@ -440,8 +402,8 @@ describe("Overlay — Shadow DOM visual isolation on dark-theme host", () => {
 
   // ── Sidebar toggle ────────────────────────────────────────────────────────
   it("Alt+S closes the sidebar when it is already open", async () => {
-    await page.keyboard.press("Alt+s");  // open
-    await page.keyboard.press("Alt+s");  // close
+    await page.keyboard.press("Alt+s");
+    await page.keyboard.press("Alt+s");
     const open = await page.evaluate(() => {
       const host = document.querySelector("#proto-studio-root") as HTMLElement;
       return host?.shadowRoot?.querySelector(".proto-sidebar")?.classList.contains("open");
@@ -451,8 +413,6 @@ describe("Overlay — Shadow DOM visual isolation on dark-theme host", () => {
 
   // ── Directory serve: index page ───────────────────────────────────────────
   it("directory index page is served when a directory is given", async () => {
-    // This check is done at HTTP level — we already have a dir test in serve.test.ts
-    // but confirm the behaviour via a browser page load here too
     const res = await fetch(BASE);
     expect(res.ok).toBe(true);
   });

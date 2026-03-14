@@ -1,15 +1,23 @@
-import { readFileSync, writeFileSync, readdirSync, statSync } from "node:fs";
-import { join, resolve, basename, extname } from "node:path";
+import { readFileSync, readdirSync, statSync, existsSync } from "node:fs";
+import { join, resolve, basename, extname, dirname } from "node:path";
 import express from "express";
 import { WebSocketServer, WebSocket } from "ws";
-import { createServer, type Server as HttpServer } from "node:http";
+import { createServer } from "node:http";
 import chalk from "chalk";
 import { injectScript } from "../core/html-parser.js";
-import { insertAnnotation, formatAnnotationComment } from "../core/annotations.js";
 import { createFileWatcher } from "./watcher.js";
 import { getOverlayScript } from "../client/overlay.js";
-import type { AnnotationComment } from "../core/types.js";
-import type { ServeOptions } from "../core/types.js";
+import {
+  createTask,
+  listTasks,
+  updateTask,
+  deleteTask,
+  saveScreenshot,
+  ensureTaskDirs,
+  getScreenshotsDir,
+} from "../core/tasks.js";
+import { ANNOTATION_TAGS } from "../core/types.js";
+import type { AnnotationTag, ServeOptions, Task } from "../core/types.js";
 import type { FSWatcher } from "chokidar";
 
 export interface ServeInstance {
@@ -34,8 +42,12 @@ export async function serve(
     throw new Error("No HTML files found at " + target);
   }
 
+  // Project root is where .proto/ lives (directory itself, or parent of file)
+  const projectDir = isDir ? absTarget : dirname(absTarget);
+  ensureTaskDirs(projectDir);
+
   const app = express();
-  app.use(express.json());
+  app.use(express.json({ limit: "10mb" }));
   const httpServer = createServer(app);
   const wss = new WebSocketServer({ server: httpServer });
 
@@ -48,9 +60,28 @@ export async function serve(
     }
   };
 
-  const overlayScript = getOverlayScript(options.port);
+  // Respond to ping from overlay/extension to keep connection alive
+  wss.on("connection", (ws) => {
+    ws.on("message", (raw) => {
+      try {
+        const msg = JSON.parse(raw.toString());
+        if (msg.type === "ping") {
+          ws.send(JSON.stringify({ type: "pong" }));
+        }
+      } catch { /* ignore non-JSON */ }
+    });
+  });
 
-  // Serve HTML files
+  const overlayScript = options.noOverlay ? null : getOverlayScript(options.port);
+
+  // ── Serve screenshots ────────────────────────────────────────────────────
+  const screenshotsDir = getScreenshotsDir(projectDir);
+  app.use(
+    "/screenshots",
+    express.static(screenshotsDir, { maxAge: "1h" }),
+  );
+
+  // ── Serve HTML files ─────────────────────────────────────────────────────
   if (isDir) {
     app.get("/", (_req, res) => {
       const links = htmlFiles
@@ -73,18 +104,119 @@ li{margin:8px 0}</style></head>
     const route = isDir ? `/${basename(file)}` : "/";
     app.get(route, (_req, res) => {
       const html = readFileSync(file, "utf-8");
-      const injected = injectScript(html, overlayScript);
-      res.type("html").send(injected);
+      const content = overlayScript ? injectScript(html, overlayScript) : html;
+      res.type("html").send(content);
     });
   }
 
-  // Annotation API
+  // ── Task API ─────────────────────────────────────────────────────────────
+  // List all tasks
+  app.get("/api/tasks", (_req, res) => {
+    const tasks = listTasks(projectDir);
+    res.json({ tasks });
+  });
+
+  // Create task
+  app.post("/api/tasks", (req, res) => {
+    const { title, description, tag, selector, url, priority, screenshot } =
+      req.body as {
+        title?: string;
+        description?: string;
+        tag?: string;
+        selector?: string;
+        url?: string;
+        priority?: string;
+        screenshot?: string;
+      };
+
+    if (!title || !selector || !tag) {
+      res.status(400).json({ error: "Missing required fields: title, selector, tag" });
+      return;
+    }
+
+    if (!(ANNOTATION_TAGS as readonly string[]).includes(tag)) {
+      res.status(400).json({ error: `Invalid tag: ${tag}` });
+      return;
+    }
+
+    const task = createTask(projectDir, {
+      title,
+      description: description || "",
+      tag: tag as AnnotationTag,
+      selector,
+      url: url || undefined,
+      priority: (priority as Task["priority"]) || "medium",
+      status: "todo",
+      screenshot: undefined,
+    });
+
+    // Save screenshot if provided
+    if (screenshot) {
+      const filename = saveScreenshot(projectDir, task.id, screenshot);
+      updateTask(projectDir, task.id, { screenshot: filename });
+      task.screenshot = filename;
+    }
+
+    broadcast({ type: "tasks-updated" });
+    res.json({ success: true, task });
+  });
+
+  // Update task
+  app.patch("/api/tasks/:id", (req, res) => {
+    const { id } = req.params;
+    const updates = req.body as Partial<
+      Pick<Task, "status" | "priority" | "title" | "description" | "tag">
+    >;
+
+    const updated = updateTask(projectDir, id, updates);
+    if (!updated) {
+      res.status(404).json({ error: "Task not found" });
+      return;
+    }
+
+    broadcast({ type: "tasks-updated" });
+    res.json({ success: true, task: updated });
+  });
+
+  // Delete task
+  app.delete("/api/tasks/:id", (req, res) => {
+    const { id } = req.params;
+    const deleted = deleteTask(projectDir, id);
+    if (!deleted) {
+      res.status(404).json({ error: "Task not found" });
+      return;
+    }
+
+    broadcast({ type: "tasks-updated" });
+    res.json({ success: true });
+  });
+
+  // Screenshot upload
+  app.post("/api/tasks/:id/screenshot", (req, res) => {
+    const { id } = req.params;
+    const { screenshot } = req.body as { screenshot?: string };
+    if (!screenshot) {
+      res.status(400).json({ error: "Missing screenshot data" });
+      return;
+    }
+
+    const filename = saveScreenshot(projectDir, id, screenshot);
+    const updated = updateTask(projectDir, id, { screenshot: filename });
+    if (!updated) {
+      res.status(404).json({ error: "Task not found" });
+      return;
+    }
+
+    res.json({ success: true, screenshot: filename });
+  });
+
+  // Legacy annotation API (backward compat with old overlay/tests)
   app.post("/api/annotate", (req, res) => {
     const { file, targetSelector, tag, text } = req.body as {
-      file: string;
-      targetSelector: string;
-      tag: string;
-      text: string;
+      file?: string;
+      targetSelector?: string;
+      tag?: string;
+      text?: string;
     };
 
     if (!file || !targetSelector || !tag || !text) {
@@ -92,36 +224,37 @@ li{margin:8px 0}</style></head>
       return;
     }
 
+    // Resolve the target file
     const filePath = isDir ? join(absTarget, file) : absTarget;
-    if (!htmlFiles.includes(filePath) || (isDir && !htmlFiles.some((f) => basename(f) === file))) {
+    const fileExists = isDir
+      ? htmlFiles.some((f) => basename(f) === file)
+      : basename(absTarget) === file;
+
+    if (!fileExists) {
       res.status(404).json({ error: "File not found" });
       return;
     }
-    if (!isDir && basename(absTarget) !== file) {
-      res.status(404).json({ error: "File not found" });
-      return;
-    }
 
-    const annotation: AnnotationComment = {
-      tag: tag as AnnotationComment["tag"],
-      targetSelector,
-      text,
-    };
-
-    const html = readFileSync(filePath, "utf-8");
-    const updated = insertAnnotation(html, targetSelector, annotation);
-    writeFileSync(filePath, updated, "utf-8");
-
-    res.json({
-      success: true,
-      comment: formatAnnotationComment(annotation),
+    // Create as a task instead of HTML comment
+    const task = createTask(projectDir, {
+      title: text.slice(0, 80),
+      description: text,
+      tag: (ANNOTATION_TAGS as readonly string[]).includes(tag)
+        ? (tag as AnnotationTag)
+        : "TODO",
+      selector: targetSelector,
+      url: `/${file}`,
+      priority: "medium",
+      status: "todo",
     });
+
+    broadcast({ type: "tasks-updated" });
+    res.json({ success: true, task });
   });
 
-  // File watcher
+  // ── File watcher ─────────────────────────────────────────────────────────
   let watcher: FSWatcher | null = null;
-  const watchTarget = isDir ? absTarget : absTarget;
-  watcher = createFileWatcher(watchTarget, {
+  watcher = createFileWatcher(absTarget, {
     onChange: (changedPath) => {
       const name = basename(changedPath);
       console.log(chalk.dim(`  File changed: ${name}`));
@@ -137,6 +270,7 @@ li{margin:8px 0}</style></head>
         const route = isDir ? `/${basename(f)}` : "/";
         console.log(chalk.dim(`  ${basename(f)} → ${url}${route}`));
       }
+      console.log(chalk.dim("  Task API: " + url + "/api/tasks"));
       console.log(chalk.dim("  Press Ctrl+C to stop\n"));
 
       if (options.open) {

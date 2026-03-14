@@ -1,0 +1,27 @@
+{
+  "manifest_version": 3,
+  "name": "Proto Studio",
+  "version": "1.0.0",
+  "description": "Annotate real webpages with tasks for LLM-driven development",
+  "permissions": ["activeTab", "contextMenus", "storage", "alarms"],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content-script.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_title": "Proto Studio",
+    "default_popup": "popup.html"
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}
