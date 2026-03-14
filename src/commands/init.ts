@@ -230,6 +230,30 @@ When generating HTML prototypes:
 6. **Navigation** — use relative \`<a href="./page.html">\` links; repeat nav verbatim in every file
 7. **Process annotations** — implement \`@TODO\`/\`@FEATURE\` and remove them, never modify \`@KEEP\`, answer \`@QUESTION\` with \`@CONTEXT\`
 8. Never rename or remove existing \`data-proto-id\` attributes
+
+## CLI Task Commands
+
+Use these CLI commands to manage tasks during development:
+
+\`\`\`bash
+# List all tasks
+proto tasks .
+
+# Filter by status
+proto tasks . --status todo
+proto tasks . --status in-progress
+proto tasks . --status done
+
+# Filter by tag or priority
+proto tasks . --tag TODO
+proto tasks . --priority high
+
+# Archive done tasks (with optional reason)
+proto archive . --reason "Sprint 1 complete"
+
+# Archive all tasks
+proto archive . --all --reason "Project complete"
+\`\`\`
 `;
 
 const PACKAGE_JSON_TEMPLATE = JSON.stringify(
@@ -287,6 +311,59 @@ const STARTER_HTML_TEMPLATE = `<!DOCTYPE html>
 </html>
 `;
 
+const IMPLEMENTING_TASKS_PROMPT_TEMPLATE = `---
+description: "Prompt template for implementing open prototype tasks"
+mode: "agent"
+---
+
+# Implement Open Prototype Tasks
+
+You are working on this HTML prototype project. Your goal is to implement all open (non-done) tasks.
+
+## Step 1 — Review Open Tasks
+
+Run the following command to see all open tasks:
+
+\`\`\`bash
+proto tasks . --status todo
+proto tasks . --status in-progress
+\`\`\`
+
+Or export them as a full prompt:
+
+\`\`\`bash
+proto export . --tasks
+\`\`\`
+
+## Step 2 — Implement Each Task
+
+For each task:
+1. Find the HTML file containing the element with the given \`selector\`
+2. Locate the element using its \`data-proto-id\` attribute
+3. Implement the change described in the task
+4. Preserve all existing \`data-proto-id\` attributes
+5. Follow the rules in \`.github/instructions/prototype-studio.instructions.md\`
+
+## Step 3 — Mark Tasks Done
+
+After implementing each task, mark it done:
+
+\`\`\`bash
+# The CLI status filter helps you track progress
+proto tasks . --status todo
+\`\`\`
+
+Use the Proto Studio overlay (Alt+S sidebar) or the task API to update task status.
+
+## Rules
+
+- Implement \`@TODO\` and \`@FEATURE\` tasks completely
+- Skip tasks with status \`done\`  
+- Preserve ALL \`data-proto-id\` attributes — never rename or remove them
+- Keep navigation links consistent across pages
+- Each file must remain self-contained (no shared CSS/JS files)
+`;
+
 export function initProject(targetDir: string): { files: string[] } {
   const created: string[] = [];
 
@@ -305,6 +382,13 @@ export function initProject(targetDir: string): { files: string[] } {
   const copilotPath = join(copilotDir, "prototype-studio.instructions.md");
   writeFileSync(copilotPath, COPILOT_RULES_TEMPLATE, "utf-8");
   created.push(copilotPath);
+
+  const promptPath = join(targetDir, ".github", "prompts", "implementing-tasks.prompt.md");
+  mkdirSync(join(targetDir, ".github", "prompts"), { recursive: true });
+  if (!existsSync(promptPath)) {
+    writeFileSync(promptPath, IMPLEMENTING_TASKS_PROMPT_TEMPLATE, "utf-8");
+    created.push(promptPath);
+  }
 
   const pkgPath = join(targetDir, "package.json");
   if (!existsSync(pkgPath)) {

@@ -242,3 +242,62 @@ export function saveScreenshot(
 
   return filename;
 }
+
+export function deleteScreenshot(
+  projectDir: string,
+  taskId: string,
+): Task | null {
+  const filePath = findTaskFilePath(projectDir, taskId);
+  if (!filePath) return null;
+
+  const task = readTaskFile(filePath);
+  if (!task) return null;
+
+  if (task.screenshot) {
+    const screenshotPath = join(getScreenshotsDir(projectDir), task.screenshot);
+    if (existsSync(screenshotPath)) unlinkSync(screenshotPath);
+  }
+
+  const updated: Task = { ...task, screenshot: undefined, updated: new Date().toISOString() };
+  writeFileSync(filePath, serializeTask(updated), "utf-8");
+  return updated;
+}
+
+export function archiveTasks(
+  projectDir: string,
+  filter: "done" | "all",
+  reason: string,
+): { archived: number; archiveFile: string } {
+  const allTasks = listTasks(projectDir);
+  const toArchive = filter === "done"
+    ? allTasks.filter((t) => t.status === "done")
+    : allTasks;
+
+  if (toArchive.length === 0) return { archived: 0, archiveFile: "" };
+
+  const timestamp = new Date().toISOString().slice(0, 19).replace(/[:.]/g, "-");
+  const archiveFilename = `archive-${timestamp}.md`;
+  const archivePath = join(projectDir, PROTO_DIR, archiveFilename);
+
+  const lines: string[] = [
+    "# Archived Tasks",
+    "",
+    `**Archived:** ${new Date().toISOString()}`,
+    `**Reason:** ${reason}`,
+    `**Total:** ${toArchive.length} tasks`,
+    "",
+  ];
+
+  for (const task of toArchive) {
+    lines.push("---", "", serializeTask(task), "");
+  }
+
+  writeFileSync(archivePath, lines.join("\n"), "utf-8");
+
+  for (const task of toArchive) {
+    const fp = findTaskFilePath(projectDir, task.id);
+    if (fp) unlinkSync(fp);
+  }
+
+  return { archived: toArchive.length, archiveFile: archivePath };
+}

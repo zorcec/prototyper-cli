@@ -4,7 +4,7 @@ import { attachProject } from "./commands/attach.js";
 import { serve } from "./server/server.js";
 import { exportFile, exportDirectory, exportTasks, isDirectory as isDir } from "./commands/export.js";
 import { validateFile, validateDirectory, isDirectory as isDir2 } from "./commands/validate.js";
-import { listTasks } from "./core/tasks.js";
+import { listTasks, archiveTasks } from "./core/tasks.js";
 import { writeFileSync } from "node:fs";
 import chalk from "chalk";
 
@@ -120,12 +120,14 @@ program
   .description("List all tasks in the project")
   .argument("[dir]", "Project root directory", ".")
   .option("--status <status>", "Filter by status (todo, in-progress, done)")
-  .action((dir: string, opts: { status?: string }) => {
-    const tasks = listTasks(dir);
-    let filtered = tasks;
-    if (opts.status) {
-      filtered = tasks.filter((t) => t.status === opts.status);
-    }
+  .option("--tag <tag>", "Filter by tag (TODO, FEATURE, VARIANT, KEEP, QUESTION, CONTEXT)")
+  .option("--priority <priority>", "Filter by priority (low, medium, high, critical)")
+  .action((dir: string, opts: { status?: string; tag?: string; priority?: string }) => {
+    let filtered = listTasks(dir);
+
+    if (opts.status) filtered = filtered.filter((t) => t.status === opts.status);
+    if (opts.tag) filtered = filtered.filter((t) => t.tag === opts.tag!.toUpperCase());
+    if (opts.priority) filtered = filtered.filter((t) => t.priority === opts.priority);
 
     if (filtered.length === 0) {
       console.log(chalk.dim("No tasks found."));
@@ -146,15 +148,34 @@ program
       console.log(chalk.dim(`    ${task.selector} (${task.id})`));
     }
 
-    const todoCount = tasks.filter((t) => t.status === "todo").length;
-    const inProgressCount = tasks.filter((t) => t.status === "in-progress").length;
-    const doneCount = tasks.filter((t) => t.status === "done").length;
+    const all = listTasks(dir);
+    const todoCount = all.filter((t) => t.status === "todo").length;
+    const inProgressCount = all.filter((t) => t.status === "in-progress").length;
+    const doneCount = all.filter((t) => t.status === "done").length;
     console.log();
     console.log(
       chalk.dim(
-        `  Total: ${tasks.length} | Todo: ${todoCount} | In Progress: ${inProgressCount} | Done: ${doneCount}`,
+        `  Total: ${all.length} | Todo: ${todoCount} | In Progress: ${inProgressCount} | Done: ${doneCount}`,
       ),
     );
+  });
+
+program
+  .command("archive")
+  .description(
+    "Archive tasks into a single .md file and remove individual task files",
+  )
+  .argument("[dir]", "Project root directory", ".")
+  .option("--all", "Archive all tasks (default: only done tasks)", false)
+  .option("-r, --reason <reason>", "Reason for archiving", "Manual archive")
+  .action((dir: string, opts: { all: boolean; reason: string }) => {
+    const result = archiveTasks(dir, opts.all ? "all" : "done", opts.reason);
+    if (result.archived === 0) {
+      console.log(chalk.dim(opts.all ? "No tasks to archive." : "No done tasks to archive. Use --all to archive everything."));
+    } else {
+      console.log(chalk.green(`✓ Archived ${result.archived} task(s)`));
+      console.log(chalk.dim(`  Archive file: ${result.archiveFile}`));
+    }
   });
 
 program.parse();

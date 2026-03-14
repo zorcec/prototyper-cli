@@ -18,6 +18,8 @@ import {
   updateTask,
   deleteTask,
   saveScreenshot,
+  deleteScreenshot,
+  archiveTasks,
 } from "../../src/core/tasks.js";
 import type { Task } from "../../src/core/types.js";
 
@@ -349,5 +351,138 @@ describe("CRUD operations", () => {
     const fromDisk = listTasks(tempDir);
     expect(fromDisk[0].title).toBe("Updated title");
     expect(fromDisk[0].description).toBe("Updated desc");
+  });
+});
+
+describe("deleteScreenshot", () => {
+  let tempDir: string;
+
+  beforeEach(() => {
+    tempDir = mkdtempSync(join(tmpdir(), "proto-screenshot-"));
+  });
+
+  afterEach(() => {
+    rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  it("removes the screenshot file and clears screenshot field", () => {
+    const task = createTask(tempDir, {
+      title: "Has Screenshot",
+      description: "",
+      status: "todo",
+      priority: "medium",
+      tag: "TODO",
+      selector: '[data-proto-id="s"]',
+    });
+
+    const base64Png =
+      "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+    const filename = saveScreenshot(tempDir, task.id, base64Png);
+    updateTask(tempDir, task.id, { screenshot: filename });
+
+    const screenshotPath = join(getScreenshotsDir(tempDir), filename);
+    expect(existsSync(screenshotPath)).toBe(true);
+
+    const updated = deleteScreenshot(tempDir, task.id);
+    expect(updated).not.toBeNull();
+    expect(updated!.screenshot).toBeUndefined();
+    expect(existsSync(screenshotPath)).toBe(false);
+  });
+
+  it("returns null for non-existent task", () => {
+    ensureTaskDirs(tempDir);
+    expect(deleteScreenshot(tempDir, "nonexist")).toBeNull();
+  });
+
+  it("still returns updated task when no screenshot file exists on disk", () => {
+    const task = createTask(tempDir, {
+      title: "Ghost screenshot",
+      description: "",
+      status: "todo",
+      priority: "medium",
+      tag: "TODO",
+      selector: '[data-proto-id="ghost"]',
+    });
+
+    // Manually set screenshot in task file without creating the actual file
+    updateTask(tempDir, task.id, { screenshot: "ghost-file.png" });
+
+    const updated = deleteScreenshot(tempDir, task.id);
+    expect(updated).not.toBeNull();
+    expect(updated!.screenshot).toBeUndefined();
+  });
+});
+
+describe("archiveTasks", () => {
+  let tempDir: string;
+
+  beforeEach(() => {
+    tempDir = mkdtempSync(join(tmpdir(), "proto-archive-"));
+  });
+
+  afterEach(() => {
+    rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  function createSampleTask(title: string, status: Task["status"]) {
+    const task = createTask(tempDir, {
+      title,
+      description: "",
+      status,
+      priority: "medium",
+      tag: "TODO",
+      selector: `[data-proto-id="${title.toLowerCase()}"]`,
+    });
+    if (status !== "todo") updateTask(tempDir, task.id, { status });
+    return task;
+  }
+
+  it("archives only done tasks by default", () => {
+    createSampleTask("Task A", "todo");
+    createSampleTask("Task B", "done");
+    createSampleTask("Task C", "done");
+
+    const result = archiveTasks(tempDir, "done", "test");
+    expect(result.archived).toBe(2);
+    expect(result.archiveFile).toContain("archive-");
+
+    const remaining = listTasks(tempDir);
+    expect(remaining).toHaveLength(1);
+    expect(remaining[0].title).toBe("Task A");
+  });
+
+  it("archives all tasks when filter is 'all'", () => {
+    createSampleTask("Task A", "todo");
+    createSampleTask("Task B", "in-progress");
+    createSampleTask("Task C", "done");
+
+    const result = archiveTasks(tempDir, "all", "complete project");
+    expect(result.archived).toBe(3);
+
+    const remaining = listTasks(tempDir);
+    expect(remaining).toHaveLength(0);
+  });
+
+  it("returns 0 when no done tasks and filter is 'done'", () => {
+    createSampleTask("Task A", "todo");
+    const result = archiveTasks(tempDir, "done", "nothing to do");
+    expect(result.archived).toBe(0);
+    expect(result.archiveFile).toBe("");
+  });
+
+  it("returns 0 when no tasks and filter is 'all'", () => {
+    ensureTaskDirs(tempDir);
+    const result = archiveTasks(tempDir, "all", "empty");
+    expect(result.archived).toBe(0);
+  });
+
+  it("archive file contains task content and metadata", () => {
+    createSampleTask("Archived Task", "done");
+    const result = archiveTasks(tempDir, "done", "sprint end");
+    const content = readFileSync(result.archiveFile, "utf-8");
+    expect(content).toContain("# Archived Tasks");
+    expect(content).toContain("**Reason:** sprint end");
+    expect(content).toContain("Archived Task");
+    expect(content).toContain("**Total:** 1");
   });
 });

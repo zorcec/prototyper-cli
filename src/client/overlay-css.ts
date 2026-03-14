@@ -409,6 +409,73 @@ export const OVERLAY_CSS = `
   .proto-task-tooltip .task-card:first-child {
     margin-top: 0;
   }
+
+  /* ── Tooltip close button (shown when tooltip is pinned) ─────────── */
+  .tooltip-close-btn {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    background: none;
+    border: none;
+    color: #64748b;
+    font-size: 14px;
+    cursor: pointer;
+    padding: 2px 5px;
+    border-radius: 3px;
+    line-height: 1;
+    pointer-events: auto;
+  }
+
+  .tooltip-close-btn:hover { background: #334155; color: #e2e8f0; }
+
+  .proto-task-tooltip { position: relative; }
+
+  /* ── Sidebar legend / filter toggles ─────────────────────────────── */
+  .sidebar-legend {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-bottom: 12px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #1e293b;
+  }
+
+  .legend-toggle {
+    padding: 3px 10px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 500;
+    cursor: pointer;
+    border: 1px solid #334155;
+    background: #0f172a;
+    color: #64748b;
+    transition: all 0.1s;
+    pointer-events: auto;
+  }
+
+  .legend-toggle.active {
+    background: #1e293b;
+    color: #e2e8f0;
+    border-color: #475569;
+  }
+
+  .legend-toggle:hover { background: #1e293b; color: #cbd5e1; }
+
+  /* ── Remove screenshot button ────────────────────────────────────── */
+  .remove-screenshot-btn {
+    display: block;
+    margin-top: 6px;
+    padding: 3px 10px;
+    border-radius: 4px;
+    font-size: 11px;
+    color: #f87171;
+    border: 1px solid #f87171;
+    background: rgba(248, 113, 113, 0.1);
+    cursor: pointer;
+    pointer-events: auto;
+  }
+
+  .remove-screenshot-btn:hover { background: rgba(248, 113, 113, 0.2); }
 `;
 
 // Host-page CSS for hover outline in annotation mode

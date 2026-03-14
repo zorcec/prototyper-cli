@@ -13,6 +13,7 @@ import {
   updateTask,
   deleteTask,
   saveScreenshot,
+  deleteScreenshot,
   ensureTaskDirs,
   getScreenshotsDir,
 } from "../core/tasks.js";
@@ -208,6 +209,18 @@ li{margin:8px 0}</style></head>
     }
 
     res.json({ success: true, screenshot: filename });
+  });
+
+  // Delete screenshot
+  app.delete("/api/tasks/:id/screenshot", (req, res) => {
+    const { id } = req.params;
+    const updated = deleteScreenshot(projectDir, id);
+    if (!updated) {
+      res.status(404).json({ error: "Task not found or no screenshot" });
+      return;
+    }
+    broadcast({ type: "tasks-updated" });
+    res.json({ success: true });
   });
 
   // Legacy annotation API (backward compat with old overlay/tests)

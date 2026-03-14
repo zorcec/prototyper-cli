@@ -1,8 +1,14 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { exportFile, getExportPreamble, exportTasks } from "../../src/commands/export.js";
+import {
+  exportFile,
+  exportDirectory,
+  getExportPreamble,
+  exportTasks,
+  isDirectory,
+} from "../../src/commands/export.js";
 import { createTask, ensureTaskDirs } from "../../src/core/tasks.js";
 
 describe("exportFile", () => {
@@ -156,5 +162,79 @@ describe("exportTasks", () => {
     const result = exportTasks(tempDir);
     expect(result.taskCount).toBe(0);
     expect(result.prompt).toContain("No active tasks");
+  });
+});
+
+describe("exportDirectory", () => {
+  let tempDir: string;
+
+  beforeEach(() => {
+    tempDir = mkdtempSync(join(tmpdir(), "proto-export-dir-"));
+  });
+
+  afterEach(() => {
+    rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  const makeHtml = (title: string, protoId: string) => `<!DOCTYPE html><html>
+<head><title>${title}</title></head>
+<body><div data-proto-id="${protoId}">${title}</div></body>
+</html>`;
+
+  it("exports all HTML files in a directory", () => {
+    writeFileSync(join(tempDir, "page1.html"), makeHtml("Page One", "hero"), "utf-8");
+    writeFileSync(join(tempDir, "page2.html"), makeHtml("Page Two", "cta"), "utf-8");
+
+    const result = exportDirectory(tempDir);
+    expect(result.files).toHaveLength(2);
+    expect(result.totalAnnotations).toBe(0);
+  });
+
+  it("combines multiple files into a single prompt", () => {
+    writeFileSync(join(tempDir, "a.html"), makeHtml("Alpha", "a-hero"), "utf-8");
+    writeFileSync(join(tempDir, "b.html"), makeHtml("Beta", "b-hero"), "utf-8");
+
+    const result = exportDirectory(tempDir);
+    expect(result.files.length).toBe(2);
+  });
+
+  it("counts annotations across all files", () => {
+    const annotated = `<!-- @TODO[data-proto-id="btn"] Fix -->
+<button data-proto-id="btn">Click</button>`;
+    writeFileSync(join(tempDir, "page.html"), annotated, "utf-8");
+    writeFileSync(join(tempDir, "clean.html"), makeHtml("Clean", "cl"), "utf-8");
+
+    const result = exportDirectory(tempDir);
+    expect(result.totalAnnotations).toBe(1);
+  });
+
+  it("throws for a directory with no HTML files", () => {
+    expect(() => exportDirectory(tempDir)).toThrow("No HTML files");
+  });
+});
+
+describe("isDirectory", () => {
+  let tempDir: string;
+
+  beforeEach(() => {
+    tempDir = mkdtempSync(join(tmpdir(), "proto-isdir-"));
+  });
+
+  afterEach(() => {
+    rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  it("returns true for an existing directory", () => {
+    expect(isDirectory(tempDir)).toBe(true);
+  });
+
+  it("returns false for a file path", () => {
+    const filePath = join(tempDir, "file.html");
+    writeFileSync(filePath, "<html>test</html>", "utf-8");
+    expect(isDirectory(filePath)).toBe(false);
+  });
+
+  it("returns false for a non-existent path", () => {
+    expect(isDirectory(join(tempDir, "nonexistent"))).toBe(false);
   });
 });

@@ -294,4 +294,85 @@ describe("proto serve (e2e)", () => {
     expect(existsSync(join(tempDir, ".proto", "tasks"))).toBe(true);
     expect(existsSync(join(tempDir, ".proto", "screenshots"))).toBe(true);
   });
+
+  it("DELETE /api/tasks/:id/screenshot removes screenshot and returns success", async () => {
+    const filePath = join(tempDir, "test.html");
+    writeFileSync(filePath, SAMPLE_HTML, "utf-8");
+
+    instance = await serve(filePath, { port: 3764, open: false });
+
+    // Create a task with a screenshot
+    const createRes = await fetch("http://localhost:3764/api/tasks", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title: "Screenshot task",
+        tag: "TODO",
+        selector: '[data-proto-id="cta-button"]',
+        screenshot:
+          "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+      }),
+    });
+    const { task } = await createRes.json();
+
+    // Delete the screenshot
+    const deleteRes = await fetch(
+      `http://localhost:3764/api/tasks/${task.id}/screenshot`,
+      { method: "DELETE" },
+    );
+    expect(deleteRes.ok).toBe(true);
+    const deleteData = await deleteRes.json();
+    expect(deleteData.success).toBe(true);
+
+    // Verify screenshot is gone from task
+    const listRes = await fetch("http://localhost:3764/api/tasks");
+    const listData = await listRes.json();
+    expect(listData.tasks[0].screenshot).toBeUndefined();
+  });
+
+  it("DELETE /api/tasks/:id/screenshot returns 404 for non-existent task", async () => {
+    const filePath = join(tempDir, "test.html");
+    writeFileSync(filePath, SAMPLE_HTML, "utf-8");
+
+    instance = await serve(filePath, { port: 3765, open: false });
+
+    const res = await fetch("http://localhost:3765/api/tasks/no-such-task/screenshot", {
+      method: "DELETE",
+    });
+    expect(res.status).toBe(404);
+  });
+
+  it("POST /api/tasks/:id/screenshot uploads a screenshot", async () => {
+    const filePath = join(tempDir, "test.html");
+    writeFileSync(filePath, SAMPLE_HTML, "utf-8");
+
+    instance = await serve(filePath, { port: 3766, open: false });
+
+    const createRes = await fetch("http://localhost:3766/api/tasks", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title: "Task to screenshot",
+        tag: "TODO",
+        selector: '[data-proto-id="hero-section"]',
+      }),
+    });
+    const { task } = await createRes.json();
+
+    const uploadRes = await fetch(
+      `http://localhost:3766/api/tasks/${task.id}/screenshot`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          screenshot:
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+        }),
+      },
+    );
+    expect(uploadRes.ok).toBe(true);
+    const uploadData = await uploadRes.json();
+    expect(uploadData.success).toBe(true);
+    expect(uploadData.screenshot).toBe(`${task.id}.png`);
+  });
 });

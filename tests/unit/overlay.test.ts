@@ -133,4 +133,49 @@ describe("getOverlayScript", () => {
     const indicatorIdx = script.indexOf("renderIndicators()", fetchIdx);
     expect(indicatorIdx).toBeGreaterThan(fetchIdx);
   });
+
+  it("includes show/hide indicators toggle with localStorage persistence", () => {
+    const script = getOverlayScript(3700);
+    expect(script).toContain("indicatorsVisible");
+    expect(script).toContain("savePrefs");
+    expect(script).toContain("PREFS_KEY");
+    expect(script).toContain("localStorage");
+  });
+
+  it("includes show/hide done tasks toggle", () => {
+    const script = getOverlayScript(3700);
+    expect(script).toContain("sidebarShowDone");
+    expect(script).toContain("Show Done");
+    expect(script).toContain("sidebar-legend");
+    expect(script).toContain("legend-toggle");
+  });
+
+  it("includes sticky tooltip on click (tooltipPinned)", () => {
+    const script = getOverlayScript(3700);
+    expect(script).toContain("tooltipPinned");
+    expect(script).toContain("forceHideTooltip");
+    expect(script).toContain("tooltip-close-btn");
+  });
+
+  it("includes screenshot removal in edit popover", () => {
+    const script = getOverlayScript(3700);
+    expect(script).toContain("removeScreenshotBtn");
+    expect(script).toContain("remove-screenshot-btn");
+    expect(script).toContain("/screenshot");
+  });
+
+  it("includes captureArea with Chrome extension API fallback", () => {
+    const script = getOverlayScript(3700);
+    expect(script).toContain("captureArea");
+    expect(script).toContain("proto-capture-request");
+    expect(script).toContain("proto-capture-response");
+    expect(script).toContain("cropFromFullScreenshot");
+    expect(script).toContain("captureAreaWithCanvas");
+  });
+
+  it("includes click-outside handler to close pinned tooltip", () => {
+    const script = getOverlayScript(3700);
+    expect(script).toContain("composedPath");
+    expect(script).toContain("forceHideTooltip");
+  });
 });

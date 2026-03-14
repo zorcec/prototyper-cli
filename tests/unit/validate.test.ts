@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { validateFile } from "../../src/commands/validate.js";
+import { validateFile, validateDirectory } from "../../src/commands/validate.js";
 
 describe("validateFile", () => {
   let tempDir: string;
@@ -84,5 +84,42 @@ describe("validateFile", () => {
 
     const result = validateFile(currPath, prevPath);
     expect(result.valid).toBe(true);
+  });
+});
+
+describe("validateDirectory", () => {
+  let tempDir: string;
+
+  beforeEach(() => {
+    tempDir = mkdtempSync(join(tmpdir(), "proto-validate-dir-"));
+  });
+
+  afterEach(() => {
+    rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  const makeHtml = (id: string) =>
+    `<!DOCTYPE html><html><body><div data-proto-id="${id}">Test</div></body></html>`;
+
+  it("passes for a directory with unique IDs across files", () => {
+    writeFileSync(join(tempDir, "page1.html"), makeHtml("unique-a"), "utf-8");
+    writeFileSync(join(tempDir, "page2.html"), makeHtml("unique-b"), "utf-8");
+
+    const result = validateDirectory(tempDir);
+    expect(result.valid).toBe(true);
+    expect(Object.keys(result.fileResults)).toHaveLength(2);
+  });
+
+  it("detects cross-file duplicate IDs", () => {
+    writeFileSync(join(tempDir, "page1.html"), makeHtml("dup-id"), "utf-8");
+    writeFileSync(join(tempDir, "page2.html"), makeHtml("dup-id"), "utf-8");
+
+    const result = validateDirectory(tempDir);
+    expect(result.crossFileIssues.length).toBeGreaterThan(0);
+    expect(result.valid).toBe(false);
+  });
+
+  it("throws for empty directory", () => {
+    expect(() => validateDirectory(tempDir)).toThrow("No HTML files");
   });
 });

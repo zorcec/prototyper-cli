@@ -50,6 +50,25 @@ export function getOverlayScript(port: number): string {
   var sidebarPinned = false;
   var activeTooltip = null;
   var indicatorRafId = null;
+  var indicatorsVisible = true;
+  var sidebarShowDone = true;
+  var tooltipPinned = false;
+  var PREFS_KEY = 'proto-studio-prefs';
+
+  // Load preferences from localStorage
+  (function () {
+    try {
+      var p = JSON.parse(localStorage.getItem(PREFS_KEY) || '{}');
+      indicatorsVisible = p.indicatorsVisible !== false;
+      sidebarShowDone = p.sidebarShowDone !== false;
+    } catch (_) {}
+  })();
+
+  function savePrefs() {
+    try {
+      localStorage.setItem(PREFS_KEY, JSON.stringify({ indicatorsVisible: indicatorsVisible, sidebarShowDone: sidebarShowDone }));
+    } catch (_) {}
+  }
 
   // ── Stable WebSocket (exponential backoff + ping/pong) ────────────────
   var ws = null;
@@ -176,6 +195,12 @@ export function getOverlayScript(port: number): string {
   root.appendChild(indicatorContainer);
 
   function hideIndicatorTooltip() {
+    if (tooltipPinned) return;
+    if (activeTooltip) { activeTooltip.remove(); activeTooltip = null; }
+  }
+
+  function forceHideTooltip() {
+    tooltipPinned = false;
     if (activeTooltip) { activeTooltip.remove(); activeTooltip = null; }
   }
 
@@ -214,6 +239,10 @@ export function getOverlayScript(port: number): string {
     tooltip.style.left = Math.min(iRect.right + 6, window.innerWidth - 330) + 'px';
     tooltip.style.top = Math.max(4, Math.min(iRect.top - 8, window.innerHeight - 420)) + 'px';
 
+    var closeBtn = el('button', { className: 'tooltip-close-btn' }, '\u2715');
+    closeBtn.addEventListener('click', function (e) { e.stopPropagation(); forceHideTooltip(); });
+    tooltip.insertBefore(closeBtn, tooltip.firstChild);
+
     tooltip.addEventListener('mouseleave', function () { hideIndicatorTooltip(); });
     root.appendChild(tooltip);
     activeTooltip = tooltip;
@@ -221,8 +250,8 @@ export function getOverlayScript(port: number): string {
 
   function renderIndicators() {
     indicatorContainer.replaceChildren();
-    hideIndicatorTooltip();
-    if (tasks.length === 0) return;
+    forceHideTooltip();
+    if (!indicatorsVisible || tasks.length === 0) return;
 
     // Group tasks by selector
     var bySelector = {};
@@ -252,12 +281,19 @@ export function getOverlayScript(port: number): string {
         indicator.style.top = (elRect.top - 10) + 'px';
 
         indicator.addEventListener('mouseenter', function () {
-          showIndicatorTooltip(indicator, grp);
+          if (!tooltipPinned) showIndicatorTooltip(indicator, grp);
         });
         indicator.addEventListener('mouseleave', function (e) {
+          if (tooltipPinned) return;
           var rel = e.relatedTarget;
           if (activeTooltip && rel && (rel === activeTooltip || activeTooltip.contains(rel))) return;
           hideIndicatorTooltip();
+        });
+        indicator.addEventListener('click', function (e) {
+          e.stopPropagation();
+          forceHideTooltip();
+          showIndicatorTooltip(indicator, grp);
+          tooltipPinned = true;
         });
 
         indicatorContainer.appendChild(indicator);
@@ -301,33 +337,74 @@ export function getOverlayScript(port: number): string {
     var textarea = el('textarea', { placeholder: 'Description...' });
     textarea.value = task.description || '';
 
+    var screenshotSection = el('div', { className: 'screenshot-preview' });
+    if (task.screenshot) {
+      var screenshotImg = el('img', { src: '/screenshots/' + task.screenshot });
+      screenshotImg.style.cssText = 'max-width:100%;border-radius:4px;margin-top:6px;border:1px solid #334155;display:block;';
+      screenshotSection.appendChild(screenshotImg);
+      var removeScreenshotBtn = el('button', { className: 'remove-screenshot-btn' }, '\u2715 Remove Screenshot');
+      (function (t) {
+        removeScreenshotBtn.addEventListener('click', function () {
+          fetch(API_URL + '/' + t.id + '/screenshot', { method: 'DELETE' })
+            .then(function (r) { return r.json(); })
+            .then(function (d) { if (d.success) { fetchTasks(); } })
+            .catch(function (err) { console.error('[Proto Studio]', err); });
+          if (popover) { popover.remove(); popover = null; }
+        });
+      })(task);
+      screenshotSection.appendChild(removeScreenshotBtn);
+    }
+
+    var editCaptureBase64 = null;
+    var btnCaptureEdit = el('button', null, '\ud83d\udcf7 ' + (task.screenshot ? 'Replace' : 'Add') + ' Screenshot');
     var btnUpdate = el('button', { className: 'btn-primary' }, 'Update');
     var btnCancel = el('button', null, 'Cancel');
-    var actions = el('div', { className: 'popover-actions' }, btnUpdate, btnCancel);
+    var actions = el('div', { className: 'popover-actions' }, btnUpdate, btnCancel, btnCaptureEdit);
 
-    popover = el('div', { className: 'proto-popover' }, label, titleInput, tagSelect, statusSelect, textarea, actions);
+    popover = el('div', { className: 'proto-popover' }, label, titleInput, tagSelect, statusSelect, textarea, screenshotSection, actions);
     popover.style.left = Math.max(10, window.innerWidth / 2 - 200) + 'px';
     popover.style.top = Math.max(10, window.innerHeight / 2 - 200) + 'px';
 
     root.appendChild(popover);
     titleInput.focus();
 
+    btnCaptureEdit.addEventListener('click', function () {
+      if (popover) popover.style.visibility = 'hidden';
+      startAreaCapture(function (b64) {
+        if (popover) popover.style.visibility = '';
+        if (!b64) return;
+        editCaptureBase64 = b64;
+        screenshotSection.innerHTML = '<img src="data:image/png;base64,' + b64 + '" style="max-width:100%;border-radius:4px;margin-top:6px;border:1px solid #334155;display:block;" />';
+        btnCaptureEdit.textContent = '\ud83d\udcf7 Replace Screenshot';
+      });
+    });
+
     btnUpdate.addEventListener('click', function () {
       var newTitle = titleInput.value.trim();
       if (!newTitle) return;
 
+      var patchBody = {
+        title: newTitle,
+        tag: tagSelect.value,
+        status: statusSelect.value,
+        description: textarea.value.trim(),
+      };
+
       fetch(API_URL + '/' + task.id, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: newTitle,
-          tag: tagSelect.value,
-          status: statusSelect.value,
-          description: textarea.value.trim(),
-        }),
+        body: JSON.stringify(patchBody),
       })
         .then(function (r) { return r.json(); })
-        .then(function (d) { if (d.success) { fetchTasks(); } })
+        .then(function (d) {
+          if (!d.success) return;
+          if (!editCaptureBase64) { fetchTasks(); return; }
+          return fetch(API_URL + '/' + task.id + '/screenshot', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ screenshot: editCaptureBase64 }),
+          }).then(function () { fetchTasks(); });
+        })
         .catch(function (err) { console.error('[Proto Studio]', err); });
 
       popover.remove(); popover = null;
@@ -447,7 +524,7 @@ export function getOverlayScript(port: number): string {
       var x = Math.min(e.clientX, startX), y = Math.min(e.clientY, startY);
       var w = Math.abs(e.clientX - startX), h = Math.abs(e.clientY - startY);
       if (w < 10 || h < 10) { onDone(null); return; }
-      captureAreaWithCanvas(x, y, w, h, onDone);
+      captureArea(x, y, w, h, onDone);
     });
 
     document.addEventListener('keydown', function onEsc(e) {
@@ -456,6 +533,50 @@ export function getOverlayScript(port: number): string {
       curtain.remove(); selBox.remove();
       onDone(null);
     }, { once: false, capture: true });
+  }
+
+  function captureArea(x, y, w, h, onDone) {
+    var done = false;
+    var timer = null;
+
+    function onExtResponse(e) {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      document.removeEventListener('proto-capture-response', onExtResponse);
+      cropFromFullScreenshot(e.detail.dataUrl, x, y, w, h, onDone);
+    }
+
+    document.addEventListener('proto-capture-response', onExtResponse);
+    document.dispatchEvent(new CustomEvent('proto-capture-request', {
+      detail: { x: x, y: y, width: w, height: h, devicePixelRatio: window.devicePixelRatio || 1 }
+    }));
+
+    timer = setTimeout(function () {
+      if (done) return;
+      done = true;
+      document.removeEventListener('proto-capture-response', onExtResponse);
+      captureAreaWithCanvas(x, y, w, h, onDone);
+    }, 1500);
+  }
+
+  function cropFromFullScreenshot(fullDataUrl, x, y, w, h, onDone) {
+    var img = new Image();
+    img.onload = function () {
+      var dpr = window.devicePixelRatio || 1;
+      var canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      var ctx = canvas.getContext('2d');
+      ctx.drawImage(img,
+        (x + window.scrollX) * dpr, (y + window.scrollY) * dpr,
+        w * dpr, h * dpr,
+        0, 0, w, h
+      );
+      onDone(canvas.toDataURL('image/png').replace('data:image/png;base64,', ''));
+    };
+    img.onerror = function () { onDone(null); };
+    img.src = fullDataUrl;
   }
 
   function captureAreaWithCanvas(x, y, w, h, onDone) {
@@ -541,13 +662,36 @@ export function getOverlayScript(port: number): string {
     var todoCount = tasks.filter(function (t) { return t.status !== 'done'; }).length;
     sidebar.appendChild(el('h3', null, 'Tasks (' + todoCount + '/' + tasks.length + ')', closeBtn));
 
-    if (tasks.length === 0) {
-      sidebar.appendChild(el('p', { className: 'empty-msg' }, 'No tasks yet. Right-click or Alt+A to annotate.'));
+    // Legend / filter toggles
+    var legendSection = el('div', { className: 'sidebar-legend' });
+    var indicBtn = el('button', { className: 'legend-toggle' + (indicatorsVisible ? ' active' : '') });
+    indicBtn.textContent = (indicatorsVisible ? '\u25cf' : '\u25cb') + ' Overlay Badges';
+    indicBtn.addEventListener('click', function () {
+      indicatorsVisible = !indicatorsVisible;
+      savePrefs();
+      renderIndicators();
+      refreshSidebar();
+    });
+    legendSection.appendChild(indicBtn);
+
+    var doneToggleBtn = el('button', { className: 'legend-toggle' + (sidebarShowDone ? ' active' : '') });
+    doneToggleBtn.textContent = '\u2713 Show Done';
+    doneToggleBtn.addEventListener('click', function () {
+      sidebarShowDone = !sidebarShowDone;
+      savePrefs();
+      refreshSidebar();
+    });
+    legendSection.appendChild(doneToggleBtn);
+    sidebar.appendChild(legendSection);
+
+    var visibleTasks = sidebarShowDone ? tasks : tasks.filter(function (t) { return t.status !== 'done'; });
+    if (visibleTasks.length === 0) {
+      sidebar.appendChild(el('p', { className: 'empty-msg' }, tasks.length === 0 ? 'No tasks yet. Right-click or Alt+A to annotate.' : 'All done! Toggle "Show Done" to see completed tasks.'));
       return;
     }
 
     // Show active tasks first, then done
-    var sorted = tasks.slice().sort(function (a, b) {
+    var sorted = visibleTasks.slice().sort(function (a, b) {
       var order = { 'in-progress': 0, 'todo': 1, 'done': 2 };
       return (order[a.status] || 1) - (order[b.status] || 1);
     });
@@ -641,6 +785,16 @@ export function getOverlayScript(port: number): string {
   function hideContextMenu() {
     if (contextMenu) { contextMenu.remove(); contextMenu = null; }
   }
+
+  // ── Close pinned tooltip on outside click ─────────────────────────────
+  document.addEventListener('click', function (e) {
+    if (!tooltipPinned || !activeTooltip) return;
+    var path = e.composedPath ? e.composedPath() : [e.target];
+    for (var k = 0; k < path.length; k++) {
+      if (path[k] === host) return;
+    }
+    forceHideTooltip();
+  }, true);
 
   // ── Keyboard shortcuts ────────────────────────────────────────────────
   document.addEventListener('keydown', function (e) {

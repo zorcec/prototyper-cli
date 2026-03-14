@@ -148,4 +148,134 @@ describe("proto init (e2e)", () => {
     run(`init ${tempDir}`);
     expect(() => run(`init ${tempDir}`)).not.toThrow();
   });
+
+  it("creates implementing-tasks prompt template", () => {
+    run(`init ${tempDir}`);
+    const promptPath = join(tempDir, ".github", "prompts", "implementing-tasks.prompt.md");
+    expect(existsSync(promptPath)).toBe(true);
+    const content = readFileSync(promptPath, "utf-8");
+    expect(content).toContain("proto tasks");
+    expect(content).toContain("proto archive");
+  });
+});
+
+describe("proto attach (e2e)", () => {
+  let tempDir: string;
+
+  beforeEach(() => {
+    tempDir = mkdtempSync(join(tmpdir(), "proto-e2e-attach-"));
+  });
+
+  afterEach(() => {
+    rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  it("creates .proto config in attach mode", () => {
+    const output = run(`attach ${tempDir} --url http://localhost:4000`);
+    expect(output).toContain("Proto Studio attached");
+    const configPath = join(tempDir, ".proto", "config.json");
+    expect(existsSync(configPath)).toBe(true);
+    const config = JSON.parse(readFileSync(configPath, "utf-8"));
+    expect(config.mode).toBe("attach");
+    expect(config.url).toBe("http://localhost:4000");
+  });
+
+  it("creates .proto/tasks and .proto/screenshots directories", () => {
+    run(`attach ${tempDir}`);
+    expect(existsSync(join(tempDir, ".proto", "tasks"))).toBe(true);
+    expect(existsSync(join(tempDir, ".proto", "screenshots"))).toBe(true);
+  });
+
+  it("adds .proto/screenshots/ to .gitignore", () => {
+    run(`attach ${tempDir}`);
+    const gitignorePath = join(tempDir, ".gitignore");
+    expect(existsSync(gitignorePath)).toBe(true);
+    const content = readFileSync(gitignorePath, "utf-8");
+    expect(content).toContain(".proto/screenshots/");
+  });
+
+  it("adds proto scripts to existing package.json", () => {
+    writeFileSync(
+      join(tempDir, "package.json"),
+      JSON.stringify({ name: "my-app", scripts: {} }, null, 2),
+      "utf-8",
+    );
+    run(`attach ${tempDir}`);
+    const pkg = JSON.parse(readFileSync(join(tempDir, "package.json"), "utf-8"));
+    expect(pkg.scripts["proto:serve"]).toBeDefined();
+    expect(pkg.scripts["proto:export"]).toBeDefined();
+    expect(pkg.scripts["proto:validate"]).toBeDefined();
+  });
+
+  it("does not duplicate proto scripts if already present", () => {
+    writeFileSync(
+      join(tempDir, "package.json"),
+      JSON.stringify({
+        name: "my-app",
+        scripts: { "proto:serve": "proto serve ." },
+      }, null, 2),
+      "utf-8",
+    );
+    run(`attach ${tempDir}`);
+    const pkg = JSON.parse(readFileSync(join(tempDir, "package.json"), "utf-8"));
+    // Should still have one entry (not duplicated)
+    expect(pkg.scripts["proto:serve"]).toBe("proto serve .");
+  });
+});
+
+describe("proto tasks (e2e)", () => {
+  let tempDir: string;
+
+  beforeEach(() => {
+    tempDir = mkdtempSync(join(tmpdir(), "proto-e2e-tasks-"));
+    run(`init ${tempDir}`);
+  });
+
+  afterEach(() => {
+    rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  it("shows 'No tasks found' for empty task dir", () => {
+    const output = run(`tasks ${tempDir}`);
+    expect(output).toContain("No tasks found");
+  });
+
+  it("lists tasks with --status filter after creating tasks via API", async () => {
+    // This test just verifies the CLI runs without error with filters
+    const output = run(`tasks ${tempDir} --status todo`);
+    expect(output).toContain("No tasks found");
+  });
+
+  it("lists tasks with --tag filter", () => {
+    const output = run(`tasks ${tempDir} --tag TODO`);
+    expect(output).toContain("No tasks found");
+  });
+
+  it("lists tasks with --priority filter", () => {
+    const output = run(`tasks ${tempDir} --priority high`);
+    expect(output).toContain("No tasks found");
+  });
+});
+
+describe("proto archive (e2e)", () => {
+  let tempDir: string;
+
+  beforeEach(() => {
+    tempDir = mkdtempSync(join(tmpdir(), "proto-e2e-archive-"));
+    run(`init ${tempDir}`);
+  });
+
+  afterEach(() => {
+    rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  it("reports no tasks to archive when empty", () => {
+    const output = run(`archive ${tempDir}`);
+    expect(output).toContain("No done tasks");
+  });
+
+  it("reports no tasks with --all on empty project", () => {
+    const output = run(`archive ${tempDir} --all`);
+    expect(output).toContain("No tasks to archive");
+  });
 });
