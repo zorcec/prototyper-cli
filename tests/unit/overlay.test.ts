@@ -145,9 +145,25 @@ describe("getOverlayScript", () => {
   it("includes show/hide done tasks toggle", () => {
     const script = getOverlayScript(3700);
     expect(script).toContain("sidebarShowDone");
-    expect(script).toContain("Show Done");
+    expect(script).toContain("Show Done Tasks");
     expect(script).toContain("sidebar-legend");
     expect(script).toContain("legend-toggle");
+  });
+
+  it("show done filter triggers renderIndicators (filter applies to both overlay and sidebar)", () => {
+    const script = getOverlayScript(3700);
+    // The doneToggleBtn click handler must call renderIndicators() before refreshSidebar()
+    const doneIdx = script.indexOf("Show Done Tasks");
+    const renderIdx = script.indexOf("renderIndicators()", doneIdx);
+    const refreshIdx = script.indexOf("refreshSidebar()", doneIdx);
+    expect(renderIdx).toBeGreaterThan(doneIdx);
+    expect(refreshIdx).toBeGreaterThan(renderIdx);
+  });
+
+  it("renderIndicators hides all-done group when sidebarShowDone is false", () => {
+    const script = getOverlayScript(3700);
+    // Guard: skip all-done indicator when sidebarShowDone is false
+    expect(script).toContain("allDone && !sidebarShowDone");
   });
 
   it("includes sticky tooltip on click (tooltipPinned)", () => {
@@ -177,5 +193,23 @@ describe("getOverlayScript", () => {
     const script = getOverlayScript(3700);
     expect(script).toContain("composedPath");
     expect(script).toContain("forceHideTooltip");
+  });
+
+  it("falls back to data-testid when data-proto-id is absent", () => {
+    const script = getOverlayScript(3700);
+    expect(script).toContain("data-testid");
+    expect(script).toContain("selectorAttr");
+    // selector is built from attribute name, not hardcoded to data-proto-id
+    expect(script).toContain("[' + selectorAttr + '");
+  });
+
+  it("submitTask uses full selector string, not bare protoId", () => {
+    const script = getOverlayScript(3700);
+    // submitTask first param is selector (a '[attr="id"]' string), not protoId
+    expect(script).toContain("submitTask(selector,");
+    // selector must not be hardcoded inside submitTask body
+    const submitIdx = script.indexOf("function submitTask(selector,");
+    const hardcoded = script.indexOf('[data-proto-id="\'', submitIdx);
+    expect(hardcoded).toBe(-1);
   });
 });

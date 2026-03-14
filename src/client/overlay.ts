@@ -272,6 +272,7 @@ export function getOverlayScript(port: number): string {
 
       var activeTasks = group.filter(function (t) { return t.status !== 'done'; });
       var allDone = activeTasks.length === 0;
+      if (allDone && !sidebarShowDone) continue;
       var count = activeTasks.length;
 
       (function (grp, allDoneFlag, countNum, elRect) {
@@ -417,9 +418,13 @@ export function getOverlayScript(port: number): string {
   function showPopover(element, x, y) {
     if (popover) { popover.remove(); popover = null; }
     var protoId = element.getAttribute('data-proto-id');
-    if (!protoId) return;
+    var testId  = element.getAttribute('data-testid');
+    var selectorId   = protoId || testId;
+    if (!selectorId) return;
+    var selectorAttr = protoId ? 'data-proto-id' : 'data-testid';
+    var selector     = '[' + selectorAttr + '="' + selectorId + '"]';
 
-    var label    = el('div', { className: 'popover-label' }, 'Annotating: ', el('strong', null, protoId));
+    var label    = el('div', { className: 'popover-label' }, 'Annotating: ', el('strong', null, selectorId));
     var titleInput = el('input', { type: 'text', placeholder: 'Task title...' });
     var select   = el('select', null);
     for (var i = 0; i < TAGS.length; i++) {
@@ -460,7 +465,7 @@ export function getOverlayScript(port: number): string {
       var text = textarea.value.trim();
       var title = titleInput.value.trim() || text.slice(0, 80) || 'Untitled';
       if (!text && !title) return;
-      submitTask(protoId, select.value, title, text || title, captureBase64);
+      submitTask(selector, select.value, title, text || title, captureBase64);
       captureBase64 = null;
       popover.remove(); popover = null;
     });
@@ -470,7 +475,7 @@ export function getOverlayScript(port: number): string {
     });
   }
 
-  function submitTask(protoId, tag, title, description, screenshotBase64) {
+  function submitTask(selector, tag, title, description, screenshotBase64) {
     var url = location.pathname;
     fetch(API_URL, {
       method: 'POST',
@@ -479,7 +484,7 @@ export function getOverlayScript(port: number): string {
         title: title,
         description: description,
         tag: tag,
-        selector: '[data-proto-id="' + protoId + '"]',
+        selector: selector,
         url: url,
         priority: 'medium',
         screenshot: screenshotBase64 || null,
@@ -675,10 +680,11 @@ export function getOverlayScript(port: number): string {
     legendSection.appendChild(indicBtn);
 
     var doneToggleBtn = el('button', { className: 'legend-toggle' + (sidebarShowDone ? ' active' : '') });
-    doneToggleBtn.textContent = '\u2713 Show Done';
+    doneToggleBtn.textContent = '\u2713 Show Done Tasks';
     doneToggleBtn.addEventListener('click', function () {
       sidebarShowDone = !sidebarShowDone;
       savePrefs();
+      renderIndicators();
       refreshSidebar();
     });
     legendSection.appendChild(doneToggleBtn);
@@ -741,7 +747,9 @@ export function getOverlayScript(port: number): string {
   function showContextMenu(element, x, y) {
     hideContextMenu();
     var protoId = element.getAttribute('data-proto-id');
-    if (!protoId) return;
+    var testId  = element.getAttribute('data-testid');
+    var selectorId = protoId || testId;
+    if (!selectorId) return;
 
     contextMenu = el('div', { className: 'proto-context-menu' });
     contextMenu.style.left = Math.min(x, window.innerWidth - 220) + 'px';
@@ -758,7 +766,7 @@ export function getOverlayScript(port: number): string {
       var item = menuItems[i];
       var btn = el('button', null,
         el('span', { className: 'menu-icon' }, item.icon),
-        item.label + ' for "' + protoId + '"'
+        item.label + ' for "' + selectorId + '"'
       );
       (function (tag) {
         btn.addEventListener('click', function () {
@@ -810,7 +818,7 @@ export function getOverlayScript(port: number): string {
 
   // ── Right-click context menu ──────────────────────────────────────────
   document.addEventListener('contextmenu', function (e) {
-    var target = e.target.closest('[data-proto-id]');
+    var target = e.target.closest('[data-proto-id]') || e.target.closest('[data-testid]');
     if (!target) return;
     if (e.composedPath().indexOf(host) !== -1) return;
     e.preventDefault();
@@ -821,7 +829,7 @@ export function getOverlayScript(port: number): string {
   document.addEventListener('click', function (e) {
     if (!annotationMode) return;
     if (e.composedPath().indexOf(host) !== -1) return;
-    var target = e.target.closest('[data-proto-id]');
+    var target = e.target.closest('[data-proto-id]') || e.target.closest('[data-testid]');
     if (!target) return;
     e.preventDefault();
     e.stopPropagation();
