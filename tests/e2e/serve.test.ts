@@ -110,9 +110,7 @@ describe("proto serve (e2e)", () => {
       body: JSON.stringify({
         title: "Fix the button",
         description: "Make it bigger",
-        tag: "TODO",
         selector: '[data-proto-id="cta-button"]',
-        priority: "high",
       }),
     });
 
@@ -120,7 +118,6 @@ describe("proto serve (e2e)", () => {
     expect(result.success).toBe(true);
     expect(result.task.id).toBeDefined();
     expect(result.task.title).toBe("Fix the button");
-    expect(result.task.tag).toBe("TODO");
 
     // Verify it appears in the list
     const listRes = await fetch("http://localhost:3754/api/tasks");
@@ -155,7 +152,6 @@ describe("proto serve (e2e)", () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         title: "Update me",
-        tag: "TODO",
         selector: '[data-proto-id="hero-section"]',
       }),
     });
@@ -185,7 +181,6 @@ describe("proto serve (e2e)", () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         title: "Delete me",
-        tag: "FEATURE",
         selector: '[data-proto-id="main-title"]',
       }),
     });
@@ -228,7 +223,6 @@ describe("proto serve (e2e)", () => {
       body: JSON.stringify({
         file: "annotate-test.html",
         targetSelector: 'data-proto-id="cta-button"',
-        tag: "TODO",
         text: "Make this button bigger",
       }),
     });
@@ -266,7 +260,6 @@ describe("proto serve (e2e)", () => {
       body: JSON.stringify({
         file: "nonexistent.html",
         targetSelector: 'data-proto-id="hero"',
-        tag: "TODO",
         text: "Fix it",
       }),
     });
@@ -308,7 +301,6 @@ describe("proto serve (e2e)", () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         title: "Screenshot task",
-        tag: "TODO",
         selector: '[data-proto-id="cta-button"]',
         screenshot:
           "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
@@ -354,7 +346,6 @@ describe("proto serve (e2e)", () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         title: "Task to screenshot",
-        tag: "TODO",
         selector: '[data-proto-id="hero-section"]',
       }),
     });
@@ -416,7 +407,6 @@ describe("proto serve — API-only mode (no target)", () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         title: "API-only task",
-        tag: "TODO",
         selector: '[data-testid="submit-btn"]',
         url: "http://localhost:5173/checkout",
       }),
@@ -442,7 +432,6 @@ describe("proto serve — API-only mode (no target)", () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         title: "Status test",
-        tag: "FEATURE",
         selector: '[data-testid="nav-home"]',
       }),
     });
@@ -466,7 +455,6 @@ describe("proto serve — API-only mode (no target)", () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         title: "Delete me",
-        tag: "TODO",
         selector: '[data-testid="delete-btn"]',
       }),
     });
@@ -547,7 +535,7 @@ describe("proto serve — proxy mode (URL target)", () => {
     const res = await fetch("http://localhost:9704/api/tasks", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title: "Proxy task", tag: "TODO", selector: "#title" }),
+      body: JSON.stringify({ title: "Proxy task", selector: "#title" }),
     });
     const data = await res.json();
     expect(data.success).toBe(true);

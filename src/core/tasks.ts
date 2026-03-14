@@ -8,16 +8,14 @@ import {
 } from "node:fs";
 import { join, extname } from "node:path";
 import { randomUUID } from "node:crypto";
-import type { Task, TaskStatus, AnnotationTag } from "./types.js";
+import type { Task, TaskStatus } from "./types.js";
 import {
-  ANNOTATION_TAGS,
   PROTO_DIR,
   TASKS_DIR,
   SCREENSHOTS_DIR,
 } from "./types.js";
 
 const VALID_STATUSES: TaskStatus[] = ["todo", "in-progress", "done"];
-const VALID_PRIORITIES = ["low", "medium", "high", "critical"];
 
 export function generateTaskId(): string {
   return randomUUID().slice(0, 8);
@@ -77,8 +75,6 @@ export function serializeTask(task: Task): string {
     "---",
     `id: ${task.id}`,
     `status: ${task.status}`,
-    `priority: ${task.priority}`,
-    `tag: ${task.tag}`,
   ];
 
   if (task.url) lines.push(`url: "${task.url}"`);
@@ -102,7 +98,7 @@ export function serializeTask(task: Task): string {
 export function parseTask(content: string): Task | null {
   const { frontMatter, body } = parseFrontMatter(content);
 
-  if (!frontMatter.id || !frontMatter.tag || !frontMatter.selector) {
+  if (!frontMatter.id || !frontMatter.selector) {
     return null;
   }
 
@@ -117,12 +113,6 @@ export function parseTask(content: string): Task | null {
     status: (VALID_STATUSES.includes(frontMatter.status as TaskStatus)
       ? frontMatter.status
       : "todo") as TaskStatus,
-    priority: VALID_PRIORITIES.includes(frontMatter.priority)
-      ? (frontMatter.priority as Task["priority"])
-      : "medium",
-    tag: (ANNOTATION_TAGS as readonly string[]).includes(frontMatter.tag)
-      ? (frontMatter.tag as AnnotationTag)
-      : "TODO",
     url: frontMatter.url || undefined,
     selector: frontMatter.selector,
     screenshot: frontMatter.screenshot || undefined,
@@ -202,7 +192,7 @@ export function findTaskFilePath(
 export function updateTask(
   projectDir: string,
   taskId: string,
-  updates: Partial<Pick<Task, "status" | "priority" | "title" | "description" | "screenshot" | "tag">>,
+  updates: Partial<Pick<Task, "status" | "title" | "description" | "screenshot">>,
 ): Task | null {
   const filePath = findTaskFilePath(projectDir, taskId);
   if (!filePath) return null;
@@ -263,41 +253,4 @@ export function deleteScreenshot(
   return updated;
 }
 
-export function archiveTasks(
-  projectDir: string,
-  filter: "done" | "all",
-  reason: string,
-): { archived: number; archiveFile: string } {
-  const allTasks = listTasks(projectDir);
-  const toArchive = filter === "done"
-    ? allTasks.filter((t) => t.status === "done")
-    : allTasks;
 
-  if (toArchive.length === 0) return { archived: 0, archiveFile: "" };
-
-  const timestamp = new Date().toISOString().slice(0, 19).replace(/[:.]/g, "-");
-  const archiveFilename = `archive-${timestamp}.md`;
-  const archivePath = join(projectDir, PROTO_DIR, archiveFilename);
-
-  const lines: string[] = [
-    "# Archived Tasks",
-    "",
-    `**Archived:** ${new Date().toISOString()}`,
-    `**Reason:** ${reason}`,
-    `**Total:** ${toArchive.length} tasks`,
-    "",
-  ];
-
-  for (const task of toArchive) {
-    lines.push("---", "", serializeTask(task), "");
-  }
-
-  writeFileSync(archivePath, lines.join("\n"), "utf-8");
-
-  for (const task of toArchive) {
-    const fp = findTaskFilePath(projectDir, task.id);
-    if (fp) unlinkSync(fp);
-  }
-
-  return { archived: toArchive.length, archiveFile: archivePath };
-}

@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Overlay UI — Variant 2: Light</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #f8fafc;
+      color: #1e293b;
+      min-height: 100vh;
+      padding: 32px;
+    }
+    h1 { font-size: 20px; margin-bottom: 8px; color: #0f172a; }
+    .subtitle { color: #64748b; font-size: 14px; margin-bottom: 32px; }
+    .component-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 24px;
+    }
+    .component-section { display: flex; flex-direction: column; gap: 12px; }
+    .section-label {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #94a3b8;
+      font-weight: 600;
+    }
+
+    /* ── Status bar (light) ──────────────────────────────────────────── */
+    .proto-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: #ffffff;
+      color: #1e293b;
+      padding: 8px 14px;
+      border-radius: 8px;
+      font-size: 13px;
+      user-select: none;
+      box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+      border: 1px solid #e2e8f0;
+    }
+    .proto-status kbd {
+      display: inline-block;
+      padding: 1px 5px;
+      background: #f1f5f9;
+      border: 1px solid #cbd5e1;
+      border-radius: 3px;
+      font-size: 11px;
+      color: #475569;
+    }
+    .mode-active { color: #2563eb; font-weight: 600; }
+    .saved-ok    { color: #16a34a; }
+
+    /* ── Page switcher (light) ───────────────────────────────────────── */
+    .proto-page-switcher {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 5px 10px;
+      font-size: 12px;
+      user-select: none;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    }
+    .page-switcher-label { color: #94a3b8; margin-right: 4px; }
+    .page-tab {
+      color: #64748b;
+      text-decoration: none;
+      padding: 3px 8px;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    .page-tab:hover { background: #f1f5f9; color: #1e293b; }
+    .page-tab.active { background: #dbeafe; color: #1d4ed8; font-weight: 600; }
+
+    /* ── Task indicator dot ──────────────────────────────────────────── */
+    .proto-task-indicator {
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: #ef4444;
+      color: #fff;
+      font-size: 10px;
+      font-weight: 700;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+    }
+    .proto-task-indicator.all-done { background: #22c55e; }
+
+    /* ── Annotation popover (light) ──────────────────────────────────── */
+    .proto-popover {
+      background: #ffffff;
+      color: #1e293b;
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.1);
+      padding: 16px;
+      width: 360px;
+    }
+    .popover-label { font-size: 12px; color: #64748b; margin-bottom: 10px; }
+    .popover-label strong { color: #0f172a; }
+    .proto-popover input[type="text"],
+    .proto-popover textarea,
+    .proto-popover select {
+      display: block;
+      width: 100%;
+      padding: 6px 10px;
+      margin-bottom: 8px;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      background: #f8fafc;
+      color: #1e293b;
+      font-size: 14px;
+      font-family: system-ui, sans-serif;
+    }
+    .proto-popover textarea { min-height: 70px; resize: vertical; }
+    .proto-popover input::placeholder,
+    .proto-popover textarea::placeholder { color: #94a3b8; }
+    .popover-actions { display: flex; gap: 8px; margin-top: 8px; }
+    .btn-primary {
+      padding: 6px 14px;
+      background: #2563eb;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      font-size: 13px;
+      cursor: pointer;
+    }
+    button {
+      padding: 6px 12px;
+      background: #f1f5f9;
+      color: #475569;
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
+      font-size: 13px;
+      cursor: pointer;
+    }
+
+    /* ── Sidebar (light) ─────────────────────────────────────────────── */
+    .proto-sidebar {
+      width: 280px;
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      padding: 16px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.07);
+    }
+    .proto-sidebar h3 { font-size: 14px; font-weight: 600; color: #0f172a; margin-bottom: 12px; }
+    .sidebar-legend { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+    .legend-toggle {
+      font-size: 11px;
+      padding: 3px 8px;
+      background: #f1f5f9;
+      border: 1px solid #e2e8f0;
+      border-radius: 5px;
+      color: #64748b;
+    }
+    .legend-toggle.active { color: #2563eb; border-color: #93c5fd; background: #eff6ff; }
+    .task-card {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 10px 12px;
+      margin-bottom: 8px;
+    }
+    .task-card-header { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+    .status-badge {
+      display: inline-block; padding: 1px 6px; border-radius: 3px;
+      font-size: 10px; font-weight: 600; text-transform: uppercase; border: 1px solid;
+    }
+    .status-todo        { color: #b45309; border-color: #fcd34d; background: #fefce8; }
+    .status-in-progress { color: #1d4ed8; border-color: #93c5fd; background: #eff6ff; }
+    .status-done        { color: #15803d; border-color: #86efac; background: #f0fdf4; }
+    .task-title { font-size: 13px; font-weight: 500; color: #0f172a; margin: 4px 0; }
+    .task-selector { font-size: 11px; color: #94a3b8; font-family: monospace; }
+    .task-description { font-size: 12px; color: #475569; margin-top: 6px; }
+    .task-actions { display: flex; gap: 6px; margin-top: 8px; }
+    .edit-btn { font-size: 11px; padding: 3px 8px; background: #f1f5f9; border: 1px solid #e2e8f0; color: #475569; border-radius: 4px; cursor: pointer; }
+    .done-btn { font-size: 11px; padding: 3px 8px; background: #f0fdf4; border: 1px solid #86efac; color: #15803d; border-radius: 4px; cursor: pointer; }
+    .delete-btn { font-size: 11px; padding: 3px 8px; background: #fef2f2; border: 1px solid #fca5a5; color: #dc2626; border-radius: 4px; cursor: pointer; margin-left: auto; }
+
+    /* ── Context menu (light) ────────────────────────────────────────── */
+    .proto-context-menu {
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 6px;
+      box-shadow: 0 8px 30px rgba(0,0,0,0.12);
+      min-width: 200px;
+    }
+    .proto-context-menu button {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+      padding: 8px 10px;
+      background: transparent;
+      border: none;
+      color: #1e293b;
+      font-size: 13px;
+      text-align: left;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    .proto-context-menu button:hover { background: #f1f5f9; }
+    .menu-icon { font-size: 15px; }
+  </style>
+</head>
+<body>
+  <h1>Overlay UI — Variant 2: Light</h1>
+  <p class="subtitle">Light theme — high contrast on light backgrounds</p>
+
+  <div class="component-grid">
+    <div class="component-section" data-proto-id="status-bar-section">
+      <div class="section-label">Status Bar</div>
+      <div class="proto-status">
+        Proto Studio &middot; <kbd>Alt+A</kbd> annotate &middot; <kbd>Alt+S</kbd> sidebar
+      </div>
+      <div class="proto-status">
+        <span class="mode-active">&#x25cf; Annotation Mode</span> &middot; Click an element to annotate
+      </div>
+      <div class="proto-status">
+        <span class="saved-ok">&#x2713; Annotation saved</span>
+      </div>
+    </div>
+
+    <div class="component-section" data-proto-id="page-switcher-section">
+      <div class="section-label">Page / Variant Switcher</div>
+      <div class="proto-page-switcher">
+        <span class="page-switcher-label">Pages:</span>
+        <a class="page-tab active" href="#">index</a>
+        <a class="page-tab" href="#">property-details</a>
+        <a class="page-tab" href="#">map</a>
+      </div>
+    </div>
+
+    <div class="component-section" data-proto-id="indicators-section">
+      <div class="section-label">Task Indicator Dots</div>
+      <div style="display:flex;gap:12px;align-items:center;">
+        <div class="proto-task-indicator">3</div>
+        <div class="proto-task-indicator">1</div>
+        <div class="proto-task-indicator all-done">&#x2713;</div>
+      </div>
+    </div>
+
+    <div class="component-section" data-proto-id="create-popover-section">
+      <div class="section-label">Create Task Popover</div>
+      <div class="proto-popover">
+        <div class="popover-label">Annotating: <strong>data-proto-id="cta-button"</strong></div>
+        <input type="text" placeholder="Task title..." />
+        <textarea placeholder="Describe your feedback..."></textarea>
+        <div class="popover-actions">
+          <button class="btn-primary">Save</button>
+          <button>Cancel</button>
+          <button>&#x1f4f7; Capture Area</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="component-section" data-proto-id="context-menu-section">
+      <div class="section-label">Context Menu</div>
+      <div class="proto-context-menu">
+        <button><span class="menu-icon">&#x270f;</span>Annotate "hero-section"</button>
+      </div>
+    </div>
+
+    <div class="component-section" data-proto-id="sidebar-section" style="grid-column: span 2;">
+      <div class="section-label">Sidebar</div>
+      <div class="proto-sidebar">
+        <h3>Tasks (2/3)</h3>
+        <div class="sidebar-legend">
+          <button class="legend-toggle active">&#x25cf; Overlay Badges</button>
+          <button class="legend-toggle active">&#x2713; Show Done Tasks</button>
+        </div>
+        <div class="task-card">
+          <div class="task-card-header"><span class="status-badge status-in-progress">in-progress</span></div>
+          <div class="task-title">Fix CTA button color</div>
+          <div class="task-selector">[data-proto-id="cta-button"]</div>
+          <div class="task-description">Use brand blue</div>
+          <div class="task-actions">
+            <button class="edit-btn">&#x270f; Edit</button>
+            <button class="done-btn">&#x2713; Done</button>
+            <button class="delete-btn">&#x2715;</button>
+          </div>
+        </div>
+        <div class="task-card">
+          <div class="task-card-header"><span class="status-badge status-todo">todo</span></div>
+          <div class="task-title">Add loading spinner to map</div>
+          <div class="task-selector">[data-testid="map-container"]</div>
+          <div class="task-actions">
+            <button class="edit-btn">&#x270f; Edit</button>
+            <button class="done-btn">&#x2713; Done</button>
+            <button class="delete-btn">&#x2715;</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Overlay UI — Variant 3: Compact</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #0f172a;
+      color: #e2e8f0;
+      min-height: 100vh;
+      padding: 32px;
+    }
+    h1 { font-size: 20px; margin-bottom: 8px; color: #f8fafc; }
+    .subtitle { color: #64748b; font-size: 14px; margin-bottom: 32px; }
+    .component-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 24px;
+    }
+    .component-section { display: flex; flex-direction: column; gap: 10px; }
+    .section-label {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #475569;
+      font-weight: 600;
+    }
+
+    /* ── Compact status bar ──────────────────────────────────────────── */
+    .proto-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      background: rgba(30, 41, 59, 0.85);
+      backdrop-filter: blur(8px);
+      border: 1px solid #334155;
+      border-radius: 6px;
+      padding: 5px 8px;
+      font-size: 12px;
+      color: #94a3b8;
+      user-select: none;
+    }
+    .status-icon-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 22px;
+      height: 22px;
+      border-radius: 4px;
+      font-size: 13px;
+      cursor: pointer;
+      color: #94a3b8;
+      background: transparent;
+      border: none;
+    }
+    .status-icon-btn:hover { background: rgba(255,255,255,0.08); color: #f8fafc; }
+    .status-icon-btn.active { color: #60a5fa; }
+    .status-dot { width: 6px; height: 6px; border-radius: 50%; background: #475569; display: inline-block; }
+    .status-dot.editing { background: #60a5fa; }
+    .separator { color: #334155; }
+
+    /* ── Compact page switcher ───────────────────────────────────────── */
+    .proto-page-switcher {
+      display: inline-flex;
+      align-items: center;
+      gap: 2px;
+      background: rgba(15, 23, 42, 0.7);
+      backdrop-filter: blur(8px);
+      border: 1px solid #334155;
+      border-radius: 6px;
+      padding: 3px;
+    }
+    .page-tab {
+      color: #64748b;
+      text-decoration: none;
+      padding: 2px 7px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 11px;
+    }
+    .page-tab:hover { background: rgba(255,255,255,0.07); color: #e2e8f0; }
+    .page-tab.active { background: #1e40af; color: #fff; font-weight: 600; }
+
+    /* ── Indicator dot (compact — smaller) ───────────────────────────── */
+    .proto-task-indicator {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: #ef4444;
+      color: #fff;
+      font-size: 8px;
+      font-weight: 700;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+    .proto-task-indicator.all-done { background: #22c55e; }
+
+    /* ── Compact annotation popover ──────────────────────────────────── */
+    .proto-popover {
+      background: rgba(15, 23, 42, 0.95);
+      backdrop-filter: blur(12px);
+      color: #e2e8f0;
+      border: 1px solid #1e293b;
+      border-radius: 8px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+      padding: 10px 12px;
+      width: 280px;
+    }
+    .popover-label { font-size: 11px; color: #475569; margin-bottom: 7px; }
+    .popover-label strong { color: #94a3b8; }
+    .proto-popover input[type="text"],
+    .proto-popover textarea {
+      display: block; width: 100%;
+      padding: 5px 8px; margin-bottom: 6px;
+      border: 1px solid #1e293b; border-radius: 5px;
+      background: #0f172a; color: #e2e8f0;
+      font-size: 12px; font-family: system-ui, sans-serif;
+    }
+    .proto-popover textarea { min-height: 50px; resize: vertical; }
+    .proto-popover input::placeholder,
+    .proto-popover textarea::placeholder { color: #334155; }
+    .popover-actions { display: flex; gap: 6px; }
+    .btn-primary {
+      padding: 4px 10px; background: #2563eb; color: #fff;
+      border: none; border-radius: 5px; font-size: 12px; cursor: pointer;
+    }
+    button {
+      padding: 4px 10px; background: rgba(255,255,255,0.06);
+      color: #94a3b8; border: 1px solid #1e293b;
+      border-radius: 5px; font-size: 12px; cursor: pointer;
+    }
+
+    /* ── Compact sidebar — task chip list ────────────────────────────── */
+    .proto-sidebar {
+      width: 240px;
+      background: rgba(15, 23, 42, 0.9);
+      backdrop-filter: blur(12px);
+      border: 1px solid #1e293b;
+      border-radius: 8px;
+      padding: 10px 12px;
+    }
+    .proto-sidebar h3 {
+      font-size: 12px; font-weight: 600; color: #94a3b8;
+      text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 8px;
+    }
+    .task-chip {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 8px;
+      border-radius: 5px;
+      margin-bottom: 4px;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid transparent;
+      cursor: pointer;
+    }
+    .task-chip:hover { border-color: #1e293b; background: rgba(255,255,255,0.07); }
+    .chip-dot {
+      width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0;
+    }
+    .chip-dot.todo { background: #f59e0b; }
+    .chip-dot.in-progress { background: #3b82f6; }
+    .chip-dot.done { background: #22c55e; }
+    .chip-title { font-size: 12px; color: #cbd5e1; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .chip-selector { font-size: 10px; color: #334155; font-family: monospace; }
+
+    /* ── Compact context menu ────────────────────────────────────────── */
+    .proto-context-menu {
+      background: rgba(15, 23, 42, 0.95);
+      backdrop-filter: blur(12px);
+      border: 1px solid #1e293b;
+      border-radius: 6px;
+      box-shadow: 0 6px 20px rgba(0,0,0,0.4);
+      padding: 4px;
+      min-width: 170px;
+    }
+    .proto-context-menu button {
+      display: flex; align-items: center; gap: 7px; width: 100%;
+      padding: 6px 8px; background: transparent; border: none;
+      color: #cbd5e1; font-size: 12px; text-align: left;
+      border-radius: 4px; cursor: pointer;
+    }
+    .proto-context-menu button:hover { background: rgba(255,255,255,0.07); }
+    .menu-icon { font-size: 13px; }
+  </style>
+</head>
+<body>
+  <h1>Overlay UI — Variant 3: Compact</h1>
+  <p class="subtitle">Minimal footprint — icon-only controls, chip task list, small dots</p>
+
+  <div class="component-grid">
+    <div class="component-section" data-proto-id="status-bar-section">
+      <div class="section-label">Compact Status Bar</div>
+      <!-- Idle: icon buttons only -->
+      <div class="proto-status">
+        <span class="status-dot"></span>
+        <button class="status-icon-btn" title="Toggle annotation mode">&#x270f;</button>
+        <span class="separator">|</span>
+        <button class="status-icon-btn" title="Toggle sidebar">&#x2630;</button>
+      </div>
+      <!-- Active annotation mode -->
+      <div class="proto-status">
+        <span class="status-dot editing"></span>
+        <button class="status-icon-btn active" title="Exit annotation mode">&#x270f;</button>
+        <span class="separator">|</span>
+        <button class="status-icon-btn" title="Toggle sidebar">&#x2630;</button>
+      </div>
+    </div>
+
+    <div class="component-section" data-proto-id="page-switcher-section">
+      <div class="section-label">Compact Page Switcher (no label)</div>
+      <div class="proto-page-switcher">
+        <a class="page-tab active" href="#">index</a>
+        <a class="page-tab" href="#">details</a>
+        <a class="page-tab" href="#">map</a>
+      </div>
+    </div>
+
+    <div class="component-section" data-proto-id="indicators-section">
+      <div class="section-label">Compact Indicator Dots</div>
+      <div style="display:flex;gap:10px;align-items:center;">
+        <div class="proto-task-indicator">2</div>
+        <div class="proto-task-indicator">1</div>
+        <div class="proto-task-indicator all-done">&#x2713;</div>
+      </div>
+    </div>
+
+    <div class="component-section" data-proto-id="create-popover-section">
+      <div class="section-label">Compact Create Popover</div>
+      <div class="proto-popover">
+        <div class="popover-label">&#x25cb; <strong>#cta-button</strong></div>
+        <input type="text" placeholder="Task title..." />
+        <textarea placeholder="Details (optional)..."></textarea>
+        <div class="popover-actions">
+          <button class="btn-primary">Save</button>
+          <button>&#x2715;</button>
+          <button>&#x1f4f7;</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="component-section" data-proto-id="context-menu-section">
+      <div class="section-label">Compact Context Menu</div>
+      <div class="proto-context-menu">
+        <button><span class="menu-icon">&#x270f;</span>Annotate</button>
+      </div>
+    </div>
+
+    <div class="component-section" data-proto-id="sidebar-chip-section" style="grid-column: span 2;">
+      <div class="section-label">Compact Sidebar (chip list)</div>
+      <div class="proto-sidebar">
+        <h3>Tasks 2/3</h3>
+        <div class="task-chip">
+          <span class="chip-dot in-progress"></span>
+          <span class="chip-title">Fix CTA button color</span>
+          <span class="chip-selector">[data-proto-id="cta"]</span>
+        </div>
+        <div class="task-chip">
+          <span class="chip-dot todo"></span>
+          <span class="chip-title">Loading spinner for map</span>
+          <span class="chip-selector">[data-testid="map"]</span>
+        </div>
+        <div class="task-chip">
+          <span class="chip-dot done"></span>
+          <span class="chip-title">Update hero headline</span>
+          <span class="chip-selector">.hero h1</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

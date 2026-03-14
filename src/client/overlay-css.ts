@@ -238,17 +238,6 @@ export const OVERLAY_CSS = `
     margin-bottom: 4px;
   }
 
-  .tag-badge {
-    display: inline-block;
-    padding: 2px 7px;
-    border-radius: 4px;
-    font-size: 10px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    color: #ffffff;
-  }
-
   .status-badge {
     display: inline-block;
     padding: 1px 6px;
@@ -476,6 +465,50 @@ export const OVERLAY_CSS = `
   }
 
   .remove-screenshot-btn:hover { background: rgba(248, 113, 113, 0.2); }
+
+  /* ── Page / variant switcher ────────────────────────────────────── */
+  .proto-page-switcher {
+    position: fixed;
+    bottom: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    background: #0f172a;
+    border: 1px solid #1e293b;
+    border-radius: 8px;
+    padding: 5px 10px;
+    font-size: 12px;
+    pointer-events: auto;
+    user-select: none;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+    max-width: 80vw;
+    overflow-x: auto;
+  }
+
+  .page-switcher-label {
+    color: #64748b;
+    margin-right: 4px;
+    flex-shrink: 0;
+  }
+
+  .page-tab {
+    color: #94a3b8;
+    text-decoration: none;
+    padding: 3px 8px;
+    border-radius: 5px;
+    white-space: nowrap;
+    transition: background 0.15s, color 0.15s;
+  }
+
+  .page-tab:hover { background: #1e293b; color: #e2e8f0; }
+
+  .page-tab.active {
+    background: #1e40af;
+    color: #e2e8f0;
+    font-weight: 600;
+  }
 `;
 
 // Host-page CSS for hover outline in annotation mode.

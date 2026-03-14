@@ -12,15 +12,12 @@ export type AnnotationTag = (typeof ANNOTATION_TAGS)[number];
 
 // ── Task system (.proto/tasks/*.md) ────────────────────────────────────────
 export type TaskStatus = "todo" | "in-progress" | "done";
-export type TaskPriority = "low" | "medium" | "high" | "critical";
 
 export interface Task {
   id: string;
   title: string;
   description: string;
   status: TaskStatus;
-  priority: TaskPriority;
-  tag: AnnotationTag;
   url?: string;
   selector: string;
   screenshot?: string;

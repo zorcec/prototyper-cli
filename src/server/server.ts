@@ -18,8 +18,7 @@ import {
   ensureTaskDirs,
   getScreenshotsDir,
 } from "../core/tasks.js";
-import { ANNOTATION_TAGS } from "../core/types.js";
-import type { AnnotationTag, ServeOptions, Task } from "../core/types.js";
+import type { ServeOptions, Task } from "../core/types.js";
 import type { FSWatcher } from "chokidar";
 
 export interface ServeInstance {
@@ -28,6 +27,16 @@ export interface ServeInstance {
 }
 
 type BroadcastFn = (data: object) => void;
+
+/** Registers /api/pages — returns the list of HTML pages being served. */
+function registerPagesApi(
+  app: express.Application,
+  pages: string[],
+): void {
+  app.get("/api/pages", (_req, res) => {
+    res.json({ pages });
+  });
+}
 
 /** Registers all /api/tasks routes on the given Express app. */
 function registerTaskApi(
@@ -41,34 +50,25 @@ function registerTaskApi(
   });
 
   app.post("/api/tasks", (req, res) => {
-    const { title, description, tag, selector, url, priority, screenshot } =
+    const { title, description, selector, url, screenshot } =
       req.body as {
         title?: string;
         description?: string;
-        tag?: string;
         selector?: string;
         url?: string;
-        priority?: string;
         screenshot?: string;
       };
 
-    if (!title || !selector || !tag) {
-      res.status(400).json({ error: "Missing required fields: title, selector, tag" });
-      return;
-    }
-
-    if (!(ANNOTATION_TAGS as readonly string[]).includes(tag)) {
-      res.status(400).json({ error: `Invalid tag: ${tag}` });
+    if (!title || !selector) {
+      res.status(400).json({ error: "Missing required fields: title, selector" });
       return;
     }
 
     const task = createTask(projectDir, {
       title,
       description: description || "",
-      tag: tag as AnnotationTag,
       selector,
       url: url || undefined,
-      priority: (priority as Task["priority"]) || "medium",
       status: "todo",
       screenshot: undefined,
     });
@@ -86,7 +86,7 @@ function registerTaskApi(
   app.patch("/api/tasks/:id", (req, res) => {
     const { id } = req.params;
     const updates = req.body as Partial<
-      Pick<Task, "status" | "priority" | "title" | "description" | "tag">
+      Pick<Task, "status" | "title" | "description">
     >;
 
     const updated = updateTask(projectDir, id, updates);
@@ -201,6 +201,7 @@ async function serveApiOnly(
     res.type("application/javascript").send(overlayScript);
   });
 
+  registerPagesApi(app, []);
   registerTaskApi(app, projectDir, broadcast);
 
   return new Promise<ServeInstance>((resolvePromise, reject) => {
@@ -318,6 +319,7 @@ async function serveProxy(
     res.type("application/javascript").send(overlayScript);
   });
 
+  registerPagesApi(app, []);
   registerTaskApi(app, projectDir, broadcast);
 
   // Proxy everything else to the upstream app
@@ -504,8 +506,8 @@ li{margin:8px 0}</style></head>
     });
   }
 
-  // ── Task API ─────────────────────────────────────────────────────────────
-  registerTaskApi(app, projectDir, broadcast);
+  // ── Task API ─────────────────────────────────────────────────────────────  const pageRoutes = htmlFiles.map((f) => `/${basename(f)}`);
+  registerPagesApi(app, isDir ? pageRoutes : []);  registerTaskApi(app, projectDir, broadcast);
 
   // Legacy annotation API (backward compat with old overlay/tests)
   app.post("/api/annotate", (req, res) => {
@@ -536,12 +538,8 @@ li{margin:8px 0}</style></head>
     const task = createTask(projectDir, {
       title: text.slice(0, 80),
       description: text,
-      tag: (ANNOTATION_TAGS as readonly string[]).includes(tag)
-        ? (tag as AnnotationTag)
-        : "TODO",
       selector: targetSelector,
       url: `/${file}`,
-      priority: "medium",
       status: "todo",
     });
 

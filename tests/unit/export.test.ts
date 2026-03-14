@@ -121,15 +121,12 @@ describe("exportTasks", () => {
       title: "Fix header",
       description: "Make it sticky",
       status: "todo",
-      priority: "high",
-      tag: "TODO",
       selector: '[data-proto-id="header"]',
     });
 
     const result = exportTasks(tempDir);
     expect(result.taskCount).toBe(1);
     expect(result.prompt).toContain("Fix header");
-    expect(result.prompt).toContain("TODO");
     expect(result.prompt).toContain("Active Tasks");
   });
 
@@ -138,16 +135,12 @@ describe("exportTasks", () => {
       title: "Done task",
       description: "",
       status: "done",
-      priority: "low",
-      tag: "TODO",
       selector: '[data-proto-id="done"]',
     });
     createTask(tempDir, {
       title: "Active task",
       description: "",
       status: "todo",
-      priority: "medium",
-      tag: "FEATURE",
       selector: '[data-proto-id="active"]',
     });
 

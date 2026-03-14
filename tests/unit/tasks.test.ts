@@ -19,7 +19,6 @@ import {
   deleteTask,
   saveScreenshot,
   deleteScreenshot,
-  archiveTasks,
 } from "../../src/core/tasks.js";
 import type { Task } from "../../src/core/types.js";
 
@@ -59,7 +58,6 @@ describe("parseFrontMatter", () => {
     const content = `---
 id: abc123
 status: todo
-tag: TODO
 selector: "[data-proto-id=\\"btn\\"]"
 created: 2025-01-01T00:00:00.000Z
 ---
@@ -71,7 +69,6 @@ Some description.`;
     const { frontMatter, body } = parseFrontMatter(content);
     expect(frontMatter.id).toBe("abc123");
     expect(frontMatter.status).toBe("todo");
-    expect(frontMatter.tag).toBe("TODO");
     expect(body).toContain("# My Task");
     expect(body).toContain("Some description.");
   });
@@ -102,8 +99,6 @@ describe("serializeTask / parseTask roundtrip", () => {
     title: "Fix button color",
     description: "The button should be blue",
     status: "todo",
-    priority: "high",
-    tag: "TODO",
     url: "/page.html",
     selector: '[data-proto-id="btn"]',
     created: "2025-01-01T00:00:00.000Z",
@@ -114,8 +109,6 @@ describe("serializeTask / parseTask roundtrip", () => {
     expect(md).toContain("---");
     expect(md).toContain("id: abc12345");
     expect(md).toContain("status: todo");
-    expect(md).toContain("priority: high");
-    expect(md).toContain("tag: TODO");
     expect(md).toContain("# Fix button color");
     expect(md).toContain("The button should be blue");
   });
@@ -128,8 +121,6 @@ describe("serializeTask / parseTask roundtrip", () => {
     expect(parsed!.title).toBe(task.title);
     expect(parsed!.description).toBe(task.description);
     expect(parsed!.status).toBe(task.status);
-    expect(parsed!.priority).toBe(task.priority);
-    expect(parsed!.tag).toBe(task.tag);
   });
 
   it("returns null for content without required fields", () => {
@@ -137,7 +128,7 @@ describe("serializeTask / parseTask roundtrip", () => {
 status: todo
 ---
 
-# No ID`;
+# No ID and no selector`;
     expect(parseTask(bad)).toBeNull();
   });
 });
@@ -172,8 +163,6 @@ describe("CRUD operations", () => {
       title: "Fix the header",
       description: "Make it sticky",
       status: "todo",
-      priority: "medium",
-      tag: "TODO",
       selector: '[data-proto-id="header"]',
     });
 
@@ -196,16 +185,12 @@ describe("CRUD operations", () => {
       title: "B task",
       description: "",
       status: "todo",
-      priority: "low",
-      tag: "FEATURE",
       selector: '[data-proto-id="b"]',
     });
     createTask(tempDir, {
       title: "A task",
       description: "",
       status: "todo",
-      priority: "high",
-      tag: "TODO",
       selector: '[data-proto-id="a"]',
     });
 
@@ -218,8 +203,6 @@ describe("CRUD operations", () => {
       title: "Find me",
       description: "",
       status: "todo",
-      priority: "medium",
-      tag: "TODO",
       selector: '[data-proto-id="find"]',
     });
 
@@ -238,8 +221,6 @@ describe("CRUD operations", () => {
       title: "Update me",
       description: "",
       status: "todo",
-      priority: "medium",
-      tag: "TODO",
       selector: '[data-proto-id="upd"]',
     });
 
@@ -262,8 +243,6 @@ describe("CRUD operations", () => {
       title: "Delete me",
       description: "",
       status: "todo",
-      priority: "low",
-      tag: "TODO",
       selector: '[data-proto-id="del"]',
     });
 
@@ -281,8 +260,6 @@ describe("CRUD operations", () => {
       title: "Screenshot task",
       description: "",
       status: "todo",
-      priority: "medium",
-      tag: "TODO",
       selector: '[data-proto-id="ss"]',
     });
 
@@ -299,8 +276,6 @@ describe("CRUD operations", () => {
       title: "Read me",
       description: "Description here",
       status: "in-progress",
-      priority: "critical",
-      tag: "FEATURE",
       selector: '[data-proto-id="read"]',
     });
 
@@ -309,26 +284,6 @@ describe("CRUD operations", () => {
     expect(read).not.toBeNull();
     expect(read!.title).toBe("Read me");
     expect(read!.status).toBe("in-progress");
-    expect(read!.priority).toBe("critical");
-    expect(read!.tag).toBe("FEATURE");
-  });
-
-  it("updateTask can update tag field", () => {
-    const task = createTask(tempDir, {
-      title: "Tag update test",
-      description: "",
-      status: "todo",
-      priority: "medium",
-      tag: "TODO",
-      selector: '[data-proto-id="tag-test"]',
-    });
-
-    const updated = updateTask(tempDir, task.id, { tag: "FEATURE" });
-    expect(updated).not.toBeNull();
-    expect(updated!.tag).toBe("FEATURE");
-
-    const fromDisk = listTasks(tempDir);
-    expect(fromDisk[0].tag).toBe("FEATURE");
   });
 
   it("updateTask can update title and description", () => {
@@ -336,8 +291,6 @@ describe("CRUD operations", () => {
       title: "Original title",
       description: "Original desc",
       status: "todo",
-      priority: "medium",
-      tag: "TODO",
       selector: '[data-proto-id="title-test"]',
     });
 
@@ -370,8 +323,6 @@ describe("deleteScreenshot", () => {
       title: "Has Screenshot",
       description: "",
       status: "todo",
-      priority: "medium",
-      tag: "TODO",
       selector: '[data-proto-id="s"]',
     });
 
@@ -399,8 +350,6 @@ describe("deleteScreenshot", () => {
       title: "Ghost screenshot",
       description: "",
       status: "todo",
-      priority: "medium",
-      tag: "TODO",
       selector: '[data-proto-id="ghost"]',
     });
 
@@ -410,79 +359,5 @@ describe("deleteScreenshot", () => {
     const updated = deleteScreenshot(tempDir, task.id);
     expect(updated).not.toBeNull();
     expect(updated!.screenshot).toBeUndefined();
-  });
-});
-
-describe("archiveTasks", () => {
-  let tempDir: string;
-
-  beforeEach(() => {
-    tempDir = mkdtempSync(join(tmpdir(), "proto-archive-"));
-  });
-
-  afterEach(() => {
-    rmSync(tempDir, { recursive: true, force: true });
-  });
-
-  function createSampleTask(title: string, status: Task["status"]) {
-    const task = createTask(tempDir, {
-      title,
-      description: "",
-      status,
-      priority: "medium",
-      tag: "TODO",
-      selector: `[data-proto-id="${title.toLowerCase()}"]`,
-    });
-    if (status !== "todo") updateTask(tempDir, task.id, { status });
-    return task;
-  }
-
-  it("archives only done tasks by default", () => {
-    createSampleTask("Task A", "todo");
-    createSampleTask("Task B", "done");
-    createSampleTask("Task C", "done");
-
-    const result = archiveTasks(tempDir, "done", "test");
-    expect(result.archived).toBe(2);
-    expect(result.archiveFile).toContain("archive-");
-
-    const remaining = listTasks(tempDir);
-    expect(remaining).toHaveLength(1);
-    expect(remaining[0].title).toBe("Task A");
-  });
-
-  it("archives all tasks when filter is 'all'", () => {
-    createSampleTask("Task A", "todo");
-    createSampleTask("Task B", "in-progress");
-    createSampleTask("Task C", "done");
-
-    const result = archiveTasks(tempDir, "all", "complete project");
-    expect(result.archived).toBe(3);
-
-    const remaining = listTasks(tempDir);
-    expect(remaining).toHaveLength(0);
-  });
-
-  it("returns 0 when no done tasks and filter is 'done'", () => {
-    createSampleTask("Task A", "todo");
-    const result = archiveTasks(tempDir, "done", "nothing to do");
-    expect(result.archived).toBe(0);
-    expect(result.archiveFile).toBe("");
-  });
-
-  it("returns 0 when no tasks and filter is 'all'", () => {
-    ensureTaskDirs(tempDir);
-    const result = archiveTasks(tempDir, "all", "empty");
-    expect(result.archived).toBe(0);
-  });
-
-  it("archive file contains task content and metadata", () => {
-    createSampleTask("Archived Task", "done");
-    const result = archiveTasks(tempDir, "done", "sprint end");
-    const content = readFileSync(result.archiveFile, "utf-8");
-    expect(content).toContain("# Archived Tasks");
-    expect(content).toContain("**Reason:** sprint end");
-    expect(content).toContain("Archived Task");
-    expect(content).toContain("**Total:** 1");
   });
 });

@@ -3,17 +3,6 @@ import { OVERLAY_CSS, HOST_PAGE_CSS } from "./overlay-css.js";
 // ─────────────────────────────────────────────────────────────────────────────
 // Tag configuration
 // ─────────────────────────────────────────────────────────────────────────────
-const TAG_COLORS: Record<string, string> = {
-  TODO:     "#ef4444",
-  FEATURE:  "#3b82f6",
-  VARIANT:  "#8b5cf6",
-  KEEP:     "#22c55e",
-  QUESTION: "#f59e0b",
-  CONTEXT:  "#6b7280",
-};
-
-const TAGS = Object.keys(TAG_COLORS);
-
 export function getOverlayScript(port: number): string {
   return `
 (function () {
@@ -24,8 +13,7 @@ export function getOverlayScript(port: number): string {
 
   var WS_URL     = 'ws://localhost:${port}';
   var API_URL    = 'http://localhost:${port}/api/tasks';
-  var TAGS       = ${JSON.stringify(TAGS)};
-  var TAG_COLORS = ${JSON.stringify(TAG_COLORS)};
+  var PAGES_URL  = 'http://localhost:${port}/api/pages';
 
   // ── Shadow DOM host ───────────────────────────────────────────────────
   var host = document.createElement('div');
@@ -126,9 +114,10 @@ export function getOverlayScript(port: number): string {
   connectWS();
 
   // ── Element selector helper ───────────────────────────────────────────
-  // Builds the best available CSS selector for any DOM element so that
-  // the overlay can annotate elements even when they have no data-proto-id
-  // or data-testid.  Priority: data-proto-id > data-testid > id > CSS path.
+  // Builds the best available CSS selector for any DOM element.
+  // Priority: data-proto-id > data-testid > id > CSS path.
+  // For CSS path (last resort), traverses ancestors and anchors to the nearest
+  // ancestor with a data-testid or id attribute for stability.
   function buildElementSelector(element) {
     var protoId = element.getAttribute('data-proto-id');
     if (protoId) return { selector: '[data-proto-id="' + protoId + '"]', display: protoId };
@@ -139,10 +128,24 @@ export function getOverlayScript(port: number): string {
     var elemId = element.id;
     if (elemId && /^[a-zA-Z_-]/.test(elemId)) return { selector: '#' + elemId, display: '#' + elemId };
 
-    // Build a short CSS path (max 4 levels)
+    // Build a short CSS path (max 4 levels), anchoring to the nearest ancestor
+    // that has data-testid or id for a more stable selector (css selector as last resort)
     var parts = [];
     var cur = element;
     while (cur && cur !== document.body && parts.length < 4) {
+      // For ancestors (not the element itself), check for stable anchors
+      if (cur !== element) {
+        var ancTestId = cur.getAttribute('data-testid');
+        if (ancTestId) {
+          parts.unshift('[data-testid="' + ancTestId + '"]');
+          break;
+        }
+        var ancId = cur.id;
+        if (ancId && /^[a-zA-Z_-]/.test(ancId)) {
+          parts.unshift('#' + ancId);
+          break;
+        }
+      }
       var tag = cur.tagName.toLowerCase();
       var parent = cur.parentElement;
       if (parent) {
@@ -239,6 +242,43 @@ export function getOverlayScript(port: number): string {
 
   fetchTasks();
 
+  // ── Pages (variant switcher) ──────────────────────────────────────────
+  var pages = [];
+  var pageSwitcher = null;
+
+  function renderPageSwitcher() {
+    if (pageSwitcher) { pageSwitcher.remove(); pageSwitcher = null; }
+    if (pages.length < 2) return;
+
+    var currentPath = location.pathname;
+    pageSwitcher = el('div', { className: 'proto-page-switcher' });
+
+    var label = el('span', { className: 'page-switcher-label' }, 'Pages:');
+    pageSwitcher.appendChild(label);
+
+    for (var i = 0; i < pages.length; i++) {
+      var page = pages[i];
+      var isActive = page === currentPath || (currentPath === '/' && page === '/index.html');
+      var cls = 'page-tab' + (isActive ? ' active' : '');
+      var tab = el('a', { className: cls, href: page }, page.replace(/^\//, '').replace(/\.html$/, ''));
+      pageSwitcher.appendChild(tab);
+    }
+
+    root.appendChild(pageSwitcher);
+  }
+
+  function fetchPages() {
+    fetch(PAGES_URL)
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        pages = d.pages || [];
+        renderPageSwitcher();
+      })
+      .catch(function () { /* pages endpoint not available */ });
+  }
+
+  fetchPages();
+
   // ── Status bar ────────────────────────────────────────────────────────
   var status = el('div', { className: 'proto-status' });
   root.appendChild(status);
@@ -293,15 +333,11 @@ export function getOverlayScript(port: number): string {
 
     for (var i = 0; i < group.length; i++) {
       var task = group[i];
-      var color = TAG_COLORS[task.tag] || '#6b7280';
-
-      var badge = el('span', { className: 'tag-badge' }, task.tag);
-      badge.style.background = color;
 
       var statusCls = 'status-badge status-' + task.status.replace(' ', '-');
       var statusBadge = el('span', { className: statusCls }, task.status);
 
-      var header = el('div', { className: 'task-card-header' }, badge, statusBadge);
+      var header = el('div', { className: 'task-card-header' }, statusBadge);
       var titleEl = el('div', { className: 'task-title' }, task.title || 'Untitled');
 
       var editBtn = el('button', { className: 'edit-btn' }, '\u270f Edit');
@@ -335,12 +371,19 @@ export function getOverlayScript(port: number): string {
     forceHideTooltip();
     if (!indicatorsVisible || tasks.length === 0) return;
 
+    // Show only tasks for the current page (url matches pathname) or tasks without a url
+    var currentPath = location.pathname;
+    var pageTasks = tasks.filter(function (t) {
+      return !t.url || t.url === currentPath;
+    });
+    if (pageTasks.length === 0) return;
+
     // Group tasks by selector
     var bySelector = {};
-    for (var i = 0; i < tasks.length; i++) {
-      var s = tasks[i].selector;
+    for (var i = 0; i < pageTasks.length; i++) {
+      var s = pageTasks[i].selector;
       if (!bySelector[s]) bySelector[s] = [];
-      bySelector[s].push(tasks[i]);
+      bySelector[s].push(pageTasks[i]);
     }
 
     for (var sel in bySelector) {
@@ -404,12 +447,6 @@ export function getOverlayScript(port: number): string {
     var titleInput = el('input', { type: 'text', placeholder: 'Task title...' });
     titleInput.value = task.title || '';
 
-    var tagSelect = el('select', null);
-    for (var i = 0; i < TAGS.length; i++) {
-      tagSelect.appendChild(el('option', { value: TAGS[i] }, TAGS[i]));
-    }
-    tagSelect.value = task.tag;
-
     var statusSelect = el('select', null);
     var statuses = ['todo', 'in-progress', 'done'];
     for (var j = 0; j < statuses.length; j++) {
@@ -438,27 +475,27 @@ export function getOverlayScript(port: number): string {
       screenshotSection.appendChild(removeScreenshotBtn);
     }
 
-    var editCaptureBase64 = null;
-    var btnCaptureEdit = el('button', null, '\ud83d\udcf7 ' + (task.screenshot ? 'Replace' : 'Add') + ' Screenshot');
+    var editBtn = el('button', null, '\ud83d\udcf7 ' + (task.screenshot ? 'Replace' : 'Add') + ' Screenshot');
     var btnUpdate = el('button', { className: 'btn-primary' }, 'Update');
     var btnCancel = el('button', null, 'Cancel');
-    var actions = el('div', { className: 'popover-actions' }, btnUpdate, btnCancel, btnCaptureEdit);
+    var actions = el('div', { className: 'popover-actions' }, btnUpdate, btnCancel, editBtn);
 
-    popover = el('div', { className: 'proto-popover' }, label, titleInput, tagSelect, statusSelect, textarea, screenshotSection, actions);
+    popover = el('div', { className: 'proto-popover' }, label, titleInput, statusSelect, textarea, screenshotSection, actions);
     popover.style.left = Math.max(10, window.innerWidth / 2 - 200) + 'px';
     popover.style.top = Math.max(10, window.innerHeight / 2 - 200) + 'px';
 
     root.appendChild(popover);
     titleInput.focus();
 
-    btnCaptureEdit.addEventListener('click', function () {
+    var editCaptureBase64 = null;
+    editBtn.addEventListener('click', function () {
       if (popover) popover.style.visibility = 'hidden';
       startAreaCapture(function (b64) {
         if (popover) popover.style.visibility = '';
         if (!b64) return;
         editCaptureBase64 = b64;
         screenshotSection.innerHTML = '<img src="data:image/png;base64,' + b64 + '" style="max-width:100%;border-radius:4px;margin-top:6px;border:1px solid #334155;display:block;" />';
-        btnCaptureEdit.textContent = '\ud83d\udcf7 Replace Screenshot';
+        editBtn.textContent = '\ud83d\udcf7 Replace Screenshot';
       });
     });
 
@@ -468,7 +505,6 @@ export function getOverlayScript(port: number): string {
 
       var patchBody = {
         title: newTitle,
-        tag: tagSelect.value,
         status: statusSelect.value,
         description: textarea.value.trim(),
       };
@@ -505,10 +541,6 @@ export function getOverlayScript(port: number): string {
 
     var label    = el('div', { className: 'popover-label' }, 'Annotating: ', el('strong', null, displayName.slice(0, 60)));
     var titleInput = el('input', { type: 'text', placeholder: 'Task title...' });
-    var select   = el('select', null);
-    for (var i = 0; i < TAGS.length; i++) {
-      select.appendChild(el('option', { value: TAGS[i] }, TAGS[i]));
-    }
     var textarea  = el('textarea', { placeholder: 'Describe your feedback...' });
     var btnSave   = el('button', { className: 'btn-primary' }, 'Save');
     var btnCancel = el('button', null, 'Cancel');
@@ -516,7 +548,7 @@ export function getOverlayScript(port: number): string {
     var screenshotPreview = el('div', { className: 'screenshot-preview' });
     var actions = el('div', { className: 'popover-actions' }, btnSave, btnCancel, btnCapture);
 
-    popover = el('div', { className: 'proto-popover' }, label, titleInput, select, textarea, screenshotPreview, actions);
+    popover = el('div', { className: 'proto-popover' }, label, titleInput, textarea, screenshotPreview, actions);
 
     var posX = x !== undefined ? x : element.getBoundingClientRect().left;
     var posY = y !== undefined ? y : element.getBoundingClientRect().bottom + 8;
@@ -544,7 +576,7 @@ export function getOverlayScript(port: number): string {
       var text = textarea.value.trim();
       var title = titleInput.value.trim() || text.slice(0, 80) || 'Untitled';
       if (!text && !title) return;
-      submitTask(selector, select.value, title, text || title, captureBase64);
+      submitTask(selector, title, text || title, captureBase64);
       captureBase64 = null;
       popover.remove(); popover = null;
     });
@@ -554,7 +586,7 @@ export function getOverlayScript(port: number): string {
     });
   }
 
-  function submitTask(selector, tag, title, description, screenshotBase64) {
+  function submitTask(selector, title, description, screenshotBase64) {
     var url = location.pathname;
     fetch(API_URL, {
       method: 'POST',
@@ -562,10 +594,8 @@ export function getOverlayScript(port: number): string {
       body: JSON.stringify({
         title: title,
         description: description,
-        tag: tag,
         selector: selector,
         url: url,
-        priority: 'medium',
         screenshot: screenshotBase64 || null,
       }),
     })
@@ -783,15 +813,11 @@ export function getOverlayScript(port: number): string {
 
     for (var i = 0; i < sorted.length; i++) {
       var task = sorted[i];
-      var color = TAG_COLORS[task.tag] || '#6b7280';
-
-      var badge = el('span', { className: 'tag-badge' }, task.tag);
-      badge.style.background = color;
 
       var statusCls = 'status-badge status-' + task.status.replace(' ', '-');
       var statusBadge = el('span', { className: statusCls }, task.status);
 
-      var header = el('div', { className: 'task-card-header' }, badge, statusBadge);
+      var header = el('div', { className: 'task-card-header' }, statusBadge);
       var titleEl = el('div', { className: 'task-title' }, task.title);
       var selectorEl = el('div', { className: 'task-selector' }, task.selector);
 
@@ -832,33 +858,15 @@ export function getOverlayScript(port: number): string {
     contextMenu.style.left = Math.min(x, window.innerWidth - 220) + 'px';
     contextMenu.style.top  = Math.min(y, window.innerHeight - 200) + 'px';
 
-    var menuItems = [
-      { icon: '\u270f', label: 'Add TODO', tag: 'TODO' },
-      { icon: '\u2728', label: 'Add FEATURE', tag: 'FEATURE' },
-      { icon: '\ud83d\udd04', label: 'Add VARIANT', tag: 'VARIANT' },
-      { icon: '\u2753', label: 'Add QUESTION', tag: 'QUESTION' },
-    ];
-
-    for (var i = 0; i < menuItems.length; i++) {
-      var item = menuItems[i];
-      var btn = el('button', null,
-        el('span', { className: 'menu-icon' }, item.icon),
-        item.label + ' for "' + displayName.slice(0, 30) + '"'
-      );
-      (function (tag) {
-        btn.addEventListener('click', function () {
-          hideContextMenu();
-          showPopover(element, x, y);
-          setTimeout(function () {
-            if (popover) {
-              var sel = popover.querySelector('select');
-              if (sel) sel.value = tag;
-            }
-          }, 0);
-        });
-      })(item.tag);
-      contextMenu.appendChild(btn);
-    }
+    var annotateBtn = el('button', null,
+      el('span', { className: 'menu-icon' }, '\u270f'),
+      'Annotate "' + displayName.slice(0, 30) + '"'
+    );
+    annotateBtn.addEventListener('click', function () {
+      hideContextMenu();
+      showPopover(element, x, y);
+    });
+    contextMenu.appendChild(annotateBtn);
 
     root.appendChild(contextMenu);
 

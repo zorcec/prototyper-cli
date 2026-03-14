@@ -17,11 +17,11 @@ describe("getOverlayScript", () => {
     expect(script).toContain("http://localhost:3700/api/tasks");
   });
 
-  it("contains all annotation tags", () => {
+  it("contains status badges but no tag badges", () => {
     const script = getOverlayScript(3700);
-    for (const tag of ["TODO", "FEATURE", "VARIANT", "KEEP", "QUESTION", "CONTEXT"]) {
-      expect(script).toContain(tag);
-    }
+    expect(script).toContain("status-badge");
+    expect(script).not.toContain("tag-badge");
+    expect(script).not.toContain("TAG_COLORS");
   });
 
   it("includes keyboard shortcut handlers", () => {
@@ -113,11 +113,11 @@ describe("getOverlayScript", () => {
     expect(script).toContain("Update");
   });
 
-  it("edit popover sends PATCH request with tag, status, title, description", () => {
+  it("edit popover sends PATCH request with status, title, description", () => {
     const script = getOverlayScript(3700);
     expect(script).toContain("PATCH");
-    expect(script).toContain("tagSelect.value");
     expect(script).toContain("statusSelect.value");
+    expect(script).not.toContain("tagSelect.value");
   });
 
   it("sidebar task cards have edit buttons", () => {
@@ -211,5 +211,35 @@ describe("getOverlayScript", () => {
     const submitIdx = script.indexOf("function submitTask(selector,");
     const hardcoded = script.indexOf('[data-proto-id="\'', submitIdx);
     expect(hardcoded).toBe(-1);
+  });
+
+  it("includes page switcher for variant navigation", () => {
+    const script = getOverlayScript(3700);
+    expect(script).toContain("proto-page-switcher");
+    expect(script).toContain("fetchPages");
+    expect(script).toContain("PAGES_URL");
+    expect(script).toContain("renderPageSwitcher");
+  });
+
+  it("filters indicators by current page URL", () => {
+    const script = getOverlayScript(3700);
+    expect(script).toContain("location.pathname");
+    expect(script).toContain("pageTasks");
+  });
+
+  it("buildElementSelector anchors CSS path to ancestor data-testid", () => {
+    const script = getOverlayScript(3700);
+    // When traversing ancestors during CSS path build, testid should be preferred
+    expect(script).toContain("ancTestId");
+    expect(script).toContain("data-testid");
+    // css selector as last resort comment
+    expect(script).toContain("css selector as last resort");
+  });
+
+  it("context menu has single Annotate option (no type options)", () => {
+    const script = getOverlayScript(3700);
+    expect(script).toContain("annotateBtn");
+    expect(script).not.toContain("Add TODO");
+    expect(script).not.toContain("Add FEATURE");
   });
 });

@@ -144,23 +144,11 @@ feature, or question about a specific UI element identified by its CSS selector.
 | in-progress | Being worked on |
 | done | Completed — skip |
 
-## Task Tags
-
-| Tag | Meaning | Your Action |
-|-----|---------|-------------|
-| TODO | Change needed | Implement the change |
-| FEATURE | New feature | Add the feature |
-| VARIANT | Alternative version | Generate alternative |
-| KEEP | Do not modify | Leave unchanged |
-| QUESTION | Question for you | Answer in your response |
-| CONTEXT | Background info | Use as design context |
-
 ## Rules
 
-1. Implement every TODO and FEATURE task with status "todo"
-2. NEVER modify elements referenced by KEEP tasks
-3. Preserve ALL data-proto-id attributes
-4. Write the complete updated file(s)
+1. Implement every task with status "todo"
+2. Preserve ALL data-proto-id attributes
+3. Write the complete updated file(s)
 
 ---
 
@@ -174,9 +162,8 @@ export function exportTasks(projectDir: string): TaskExportResult {
   const taskBlocks = activeTasks
     .map(
       (t, i) =>
-        `### Task ${i + 1}: [${t.tag}] ${t.title}\n` +
+        `### Task ${i + 1}: ${t.title}\n` +
         `- **Status:** ${t.status}\n` +
-        `- **Priority:** ${t.priority}\n` +
         `- **Selector:** \`${t.selector}\`\n` +
         (t.url ? `- **URL:** ${t.url}\n` : "") +
         (t.description ? `\n${t.description}\n` : ""),

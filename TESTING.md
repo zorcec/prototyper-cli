@@ -39,7 +39,11 @@ npx vitest run --config vitest.pw.config.ts
 | Chrome extension | — | ✅ `tests/playwright/extension.test.ts` |
 | Annotation contract | ✅ `tests/unit/contract.test.ts` | — |
 | Config read/write | ✅ `tests/unit/config.test.ts` | — |
-| Tasks core (CRUD, archive, list/filter) | ✅ `tests/unit/tasks.test.ts` | — |
+| Tasks core (CRUD, list/filter) | ✅ `tests/unit/tasks.test.ts` | — |
+| Page-specific overlay dots (filter by `location.pathname`) | ✅ `tests/unit/overlay.test.ts` | — |
+| `data-testid` / `id` anchor in CSS selector (`buildElementSelector`) | ✅ `tests/unit/overlay.test.ts` | — |
+| Page / variant switcher (`GET /api/pages` + `renderPageSwitcher`) | ✅ `tests/unit/overlay.test.ts` | ✅ `tests/e2e/serve.test.ts` |
+| `proto tasks` — show full YAML front matter | — | ✅ `tests/e2e/serve.test.ts` |
 
 ---
 
@@ -80,7 +84,7 @@ Covered scenarios (23 tests):
 - Edge-trigger hover opens the sidebar
 - Escape closes the sidebar
 - Right-click opens context menu **on any element** (no attribute required)
-- Context menu lists TODO / FEATURE / QUESTION options
+- Context menu shows single "Annotate" option (task types removed)
 - Marking a task done updates the sidebar status badge
 - Annotation mode sets `cursor: crosshair` on page elements
 - Clicking inside overlay UI during annotation mode does NOT create a task
