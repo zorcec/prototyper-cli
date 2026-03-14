@@ -44,6 +44,10 @@ npx vitest run --config vitest.pw.config.ts
 | `data-testid` / `id` anchor in CSS selector (`buildElementSelector`) | ✅ `tests/unit/overlay.test.ts` | — |
 | Page / variant switcher (`GET /api/pages` + `renderPageSwitcher`) | ✅ `tests/unit/overlay.test.ts` | ✅ `tests/e2e/serve.test.ts` |
 | `proto tasks` — show full YAML front matter | — | ✅ `tests/e2e/serve.test.ts` |
+| Full-screen task edit modal (2-tab: Edit + Preview) | ✅ `tests/unit/overlay.test.ts` | — |
+| Markdown renderer (`renderMarkdown`) | ✅ `tests/unit/overlay.test.ts` | — |
+| Regression: `pageRoutes is not defined` crash (dir mode) | — | ✅ `tests/e2e/serve.test.ts` |
+| Regression: overlay `Unexpected token ','` SyntaxError | ✅ `tests/unit/overlay.test.ts` | ✅ `tests/e2e/serve.test.ts` |
 
 ---
 

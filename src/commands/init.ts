@@ -243,16 +243,6 @@ proto tasks .
 proto tasks . --status todo
 proto tasks . --status in-progress
 proto tasks . --status done
-
-# Filter by tag or priority
-proto tasks . --tag TODO
-proto tasks . --priority high
-
-# Archive done tasks (with optional reason)
-proto archive . --reason "Sprint 1 complete"
-
-# Archive all tasks
-proto archive . --all --reason "Project complete"
 \`\`\`
 `;
 

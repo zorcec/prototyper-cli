@@ -509,7 +509,198 @@ export const OVERLAY_CSS = `
     color: #e2e8f0;
     font-weight: 600;
   }
+
+  /* ── Full-screen edit modal ─────────────────────────────────────── */
+  .proto-modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: auto;
+    z-index: 10;
+  }
+
+  .proto-modal {
+    background: #1e293b;
+    border: 1px solid #334155;
+    border-radius: 12px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+    width: min(860px, 92vw);
+    height: min(620px, 88vh);
+    display: flex;
+    flex-direction: column;
+    pointer-events: auto;
+    overflow: hidden;
+  }
+
+  .modal-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 16px 10px;
+    border-bottom: 1px solid #334155;
+    flex-shrink: 0;
+  }
+
+  .modal-header input[type="text"] {
+    flex: 1;
+    padding: 6px 10px;
+    background: #0f172a;
+    border: 1px solid #334155;
+    border-radius: 6px;
+    color: #e2e8f0;
+    font-size: 15px;
+    font-weight: 500;
+    font-family: system-ui, sans-serif;
+  }
+
+  .modal-header input[type="text"]:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 2px rgba(59,130,246,0.25);
+  }
+
+  .modal-header select {
+    padding: 6px 8px;
+    background: #0f172a;
+    border: 1px solid #334155;
+    border-radius: 6px;
+    color: #e2e8f0;
+    font-size: 13px;
+    font-family: system-ui, sans-serif;
+    cursor: pointer;
+  }
+
+  .modal-tabs {
+    display: flex;
+    gap: 0;
+    padding: 0 16px;
+    border-bottom: 1px solid #334155;
+    flex-shrink: 0;
+  }
+
+  .modal-tab {
+    padding: 8px 16px;
+    font-size: 13px;
+    color: #64748b;
+    border-bottom: 2px solid transparent;
+    cursor: pointer;
+    user-select: none;
+    margin-bottom: -1px;
+  }
+
+  .modal-tab:hover { color: #94a3b8; }
+
+  .modal-tab.active {
+    color: #60a5fa;
+    border-bottom-color: #3b82f6;
+    font-weight: 500;
+  }
+
+  .modal-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    padding: 12px 16px;
+    gap: 8px;
+  }
+
+  .modal-editor-pane,
+  .modal-preview-pane {
+    flex: 1;
+    overflow: auto;
+  }
+
+  .modal-editor-pane textarea {
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    background: #0f172a;
+    border: 1px solid #334155;
+    border-radius: 6px;
+    color: #e2e8f0;
+    font-size: 13px;
+    font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
+    line-height: 1.6;
+    padding: 12px;
+    resize: none;
+    outline: none;
+  }
+
+  .modal-editor-pane textarea:focus {
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 2px rgba(59,130,246,0.15);
+  }
+
+  .modal-preview-pane {
+    background: #0f172a;
+    border: 1px solid #334155;
+    border-radius: 6px;
+    padding: 16px;
+    color: #e2e8f0;
+    font-size: 14px;
+    line-height: 1.7;
+  }
+
+  .modal-preview-pane h1,
+  .modal-preview-pane h2,
+  .modal-preview-pane h3 { font-weight: 700; margin: 0.8em 0 0.3em; }
+  .modal-preview-pane h1 { font-size: 1.4em; color: #f1f5f9; }
+  .modal-preview-pane h2 { font-size: 1.2em; color: #f1f5f9; }
+  .modal-preview-pane h3 { font-size: 1.05em; color: #cbd5e1; }
+  .modal-preview-pane p  { margin: 0.5em 0; }
+  .modal-preview-pane strong { font-weight: 700; color: #f1f5f9; }
+  .modal-preview-pane em { font-style: italic; color: #94a3b8; }
+  .modal-preview-pane code {
+    font-family: 'Menlo', monospace;
+    font-size: 12px;
+    background: #1e293b;
+    padding: 1px 5px;
+    border-radius: 3px;
+    color: #7dd3fc;
+  }
+  .modal-preview-pane pre {
+    background: #1e293b;
+    border-radius: 6px;
+    padding: 10px 12px;
+    overflow-x: auto;
+    margin: 0.6em 0;
+  }
+  .modal-preview-pane pre code {
+    background: none;
+    padding: 0;
+    color: #93c5fd;
+    font-size: 12px;
+    line-height: 1.5;
+  }
+  .modal-preview-pane ul, .modal-preview-pane ol {
+    padding-left: 20px;
+    margin: 0.4em 0;
+  }
+  .modal-preview-pane li { margin: 0.2em 0; }
+  .modal-preview-pane hr {
+    border: none;
+    border-top: 1px solid #334155;
+    margin: 0.8em 0;
+  }
+  .modal-preview-empty {
+    color: #475569;
+    font-style: italic;
+  }
+
+  .modal-footer {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 16px 14px;
+    border-top: 1px solid #334155;
+    flex-shrink: 0;
+  }
 `;
+
 
 // Host-page CSS for hover outline in annotation mode.
 // .proto-hover-highlight is toggled by JS on the directly-hovered element

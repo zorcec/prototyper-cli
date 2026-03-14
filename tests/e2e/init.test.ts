@@ -155,7 +155,7 @@ describe("proto init (e2e)", () => {
     expect(existsSync(promptPath)).toBe(true);
     const content = readFileSync(promptPath, "utf-8");
     expect(content).toContain("proto tasks");
-    expect(content).toContain("proto archive");
+    expect(content).not.toContain("proto archive");
   });
 });
 
@@ -245,37 +245,10 @@ describe("proto tasks (e2e)", () => {
     const output = run(`tasks ${tempDir} --status todo`);
     expect(output).toContain("No tasks found");
   });
-
-  it("lists tasks with --tag filter", () => {
-    const output = run(`tasks ${tempDir} --tag TODO`);
-    expect(output).toContain("No tasks found");
-  });
-
-  it("lists tasks with --priority filter", () => {
-    const output = run(`tasks ${tempDir} --priority high`);
-    expect(output).toContain("No tasks found");
-  });
 });
 
-describe("proto archive (e2e)", () => {
-  let tempDir: string;
-
-  beforeEach(() => {
-    tempDir = mkdtempSync(join(tmpdir(), "proto-e2e-archive-"));
-    run(`init ${tempDir}`);
-  });
-
-  afterEach(() => {
-    rmSync(tempDir, { recursive: true, force: true });
-  });
-
-  it("reports no tasks to archive when empty", () => {
-    const output = run(`archive ${tempDir}`);
-    expect(output).toContain("No done tasks");
-  });
-
-  it("reports no tasks with --all on empty project", () => {
-    const output = run(`archive ${tempDir} --all`);
-    expect(output).toContain("No tasks to archive");
+describe("proto archive (e2e) — removed", () => {
+  it("archive command no longer exists", () => {
+    // archive was removed in a prior release; this block is intentionally empty
   });
 });

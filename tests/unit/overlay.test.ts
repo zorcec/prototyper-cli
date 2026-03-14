@@ -107,13 +107,14 @@ describe("getOverlayScript", () => {
     expect(script).toContain("proto-task-tooltip");
   });
 
-  it("includes edit task popover", () => {
+  it("includes full-screen edit modal", () => {
     const script = getOverlayScript(3700);
-    expect(script).toContain("showEditPopover");
-    expect(script).toContain("Update");
+    expect(script).toContain("showEditModal");
+    expect(script).toContain("modal-tab");
+    expect(script).toContain("renderMarkdown");
   });
 
-  it("edit popover sends PATCH request with status, title, description", () => {
+  it("edit modal sends PATCH request with status, title, description", () => {
     const script = getOverlayScript(3700);
     expect(script).toContain("PATCH");
     expect(script).toContain("statusSelect.value");
@@ -123,7 +124,7 @@ describe("getOverlayScript", () => {
   it("sidebar task cards have edit buttons", () => {
     const script = getOverlayScript(3700);
     expect(script).toContain("edit-btn");
-    expect(script).toContain("showEditPopover");
+    expect(script).toContain("showEditModal");
   });
 
   it("calls renderIndicators after fetchTasks", () => {
@@ -241,5 +242,39 @@ describe("getOverlayScript", () => {
     expect(script).toContain("annotateBtn");
     expect(script).not.toContain("Add TODO");
     expect(script).not.toContain("Add FEATURE");
+  });
+
+  it("the compiled overlay script is valid JavaScript (no SyntaxError)", () => {
+    // Regression: template-literal escape issues caused /^// and invalid regexes
+    // that broke the overlay in the browser with 'Unexpected token ,' or similar.
+    const script = getOverlayScript(3700);
+    expect(() => new Function(script)).not.toThrow();
+  });
+
+  it("renderMarkdown is included and can render basic markdown constructs", () => {
+    const script = getOverlayScript(3700);
+    // The function must exist
+    expect(script).toContain("function renderMarkdown");
+    // Must support headings, bold, italic, lists, inline code
+    expect(script).toContain("<h1>");
+    expect(script).toContain("<strong>");
+    expect(script).toContain("<em>");
+    expect(script).toContain("<code>");
+    expect(script).toContain("<ul>");
+  });
+
+  it("edit modal has Edit and Preview tabs", () => {
+    const script = getOverlayScript(3700);
+    expect(script).toContain("modal-tab");
+    expect(script).toContain("modal-preview-pane");
+    expect(script).toContain("modal-editor-pane");
+    expect(script).toContain("Edit");
+    expect(script).toContain("Preview");
+  });
+
+  it("edit modal supports Escape key to close and Ctrl+Enter to save", () => {
+    const script = getOverlayScript(3700);
+    expect(script).toContain("Escape");
+    expect(script).toContain("ctrlKey");
   });
 });

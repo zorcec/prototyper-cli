@@ -260,7 +260,7 @@ export function getOverlayScript(port: number): string {
       var page = pages[i];
       var isActive = page === currentPath || (currentPath === '/' && page === '/index.html');
       var cls = 'page-tab' + (isActive ? ' active' : '');
-      var tab = el('a', { className: cls, href: page }, page.replace(/^\//, '').replace(/\.html$/, ''));
+      var tab = el('a', { className: cls, href: page }, page.replace(/^[/]/, '').replace(/[.]html$/, ''));
       pageSwitcher.appendChild(tab);
     }
 
@@ -344,7 +344,7 @@ export function getOverlayScript(port: number): string {
       (function (t) {
         editBtn.addEventListener('click', function () {
           hideIndicatorTooltip();
-          showEditPopover(t);
+          showEditModal(t);
         });
       })(task);
 
@@ -438,81 +438,155 @@ export function getOverlayScript(port: number): string {
   window.addEventListener('scroll', scheduleRenderIndicators, true);
   window.addEventListener('resize', scheduleRenderIndicators);
 
-  // ── Edit task popover ─────────────────────────────────────────────────
-  function showEditPopover(task) {
-    if (popover) { popover.remove(); popover = null; }
+  // ── Lightweight markdown renderer (no external deps) ────────────────
+  function renderMarkdown(md) {
+    if (!md) return '<span class="modal-preview-empty">No description yet</span>';
+    var escaped = md
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    var html = escaped
+      // Headings
+      .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+      .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+      .replace(/^# (.+)$/gm, '<h1>$1</h1>')
+      // Bold then italic (avoid double-processing)
+      .replace(/[*][*](.+?)[*][*]/g, '<strong>$1</strong>')
+      .replace(/__(.+?)__/g, '<strong>$1</strong>')
+      .replace(/[*](.+?)[*]/g, '<em>$1</em>')
+      .replace(/_([^_]+?)_/g, '<em>$1</em>')
+      // Inline code (single backtick) — written as char-code to avoid template interpolation
+      .replace(new RegExp(String.fromCharCode(96) + '(.+?)' + String.fromCharCode(96), 'g'), '<code>$1</code>')
+      // Unordered list items
+      .replace(/^[-*] (.+)$/gm, '<li>$1</li>')
+      // HR
+      .replace(/^---$/gm, '<hr>')
+      // Wrap consecutive <li> in <ul>
+      .replace(/(<li>[\\s\\S]*?<[/]li>\\n?)+/g, function (m) { return '<ul>' + m + '</ul>'; })
+      // Remaining non-empty lines not already in a block element become paragraphs
+      .replace(/^(?!<[a-z]|$).+$/gm, function (line) {
+        return '<p>' + line + '</p>';
+      });
+    return html;
+  }
 
-    var label = el('div', { className: 'popover-label' }, 'Edit: ', el('strong', null, (task.title || 'Untitled').slice(0, 60)));
+  // ── Full-screen edit modal ────────────────────────────────────────────
+  var editModal = null;
 
+  function showEditModal(task) {
+    if (editModal) { editModal.remove(); editModal = null; }
+
+    // ── Header: title input + status select ──────────────────────────
     var titleInput = el('input', { type: 'text', placeholder: 'Task title...' });
     titleInput.value = task.title || '';
 
     var statusSelect = el('select', null);
     var statuses = ['todo', 'in-progress', 'done'];
     for (var j = 0; j < statuses.length; j++) {
-      statusSelect.appendChild(el('option', { value: statuses[j] }, statuses[j]));
+      var opt = el('option', { value: statuses[j] }, statuses[j]);
+      if (statuses[j] === task.status) opt.selected = true;
+      statusSelect.appendChild(opt);
     }
-    statusSelect.value = task.status;
 
-    var textarea = el('textarea', { placeholder: 'Description...' });
+    var header = el('div', { className: 'modal-header' }, titleInput, statusSelect);
+
+    // ── Tabs ─────────────────────────────────────────────────────────
+    var tabEdit    = el('div', { className: 'modal-tab active' }, 'Edit');
+    var tabPreview = el('div', { className: 'modal-tab' }, 'Preview');
+    var tabs = el('div', { className: 'modal-tabs' }, tabEdit, tabPreview);
+
+    // ── Editor pane ───────────────────────────────────────────────────
+    var textarea = el('textarea', { placeholder: 'Description (markdown supported)...' });
     textarea.value = task.description || '';
+    var editorPane = el('div', { className: 'modal-editor-pane' }, textarea);
 
+    // ── Preview pane ──────────────────────────────────────────────────
+    var previewPane = el('div', { className: 'modal-preview-pane' });
+    previewPane.style.display = 'none';
+
+    function refreshPreview() {
+      previewPane.innerHTML = renderMarkdown(textarea.value);
+    }
+
+    var body = el('div', { className: 'modal-body' }, editorPane, previewPane);
+
+    // Tab switching
+    tabEdit.addEventListener('click', function () {
+      tabEdit.classList.add('active');
+      tabPreview.classList.remove('active');
+      editorPane.style.display = '';
+      previewPane.style.display = 'none';
+    });
+
+    tabPreview.addEventListener('click', function () {
+      tabPreview.classList.add('active');
+      tabEdit.classList.remove('active');
+      editorPane.style.display = 'none';
+      previewPane.style.display = '';
+      refreshPreview();
+    });
+
+    // ── Screenshot section ────────────────────────────────────────────
+    var editCaptureBase64 = null;
     var screenshotSection = el('div', { className: 'screenshot-preview' });
     if (task.screenshot) {
       var screenshotImg = el('img', { src: '/screenshots/' + task.screenshot });
-      screenshotImg.style.cssText = 'max-width:100%;border-radius:4px;margin-top:6px;border:1px solid #334155;display:block;';
+      screenshotImg.style.cssText = 'max-height:60px;border-radius:4px;border:1px solid #334155;';
       screenshotSection.appendChild(screenshotImg);
-      var removeScreenshotBtn = el('button', { className: 'remove-screenshot-btn' }, '\u2715 Remove Screenshot');
+      var removeScreenshotBtn = el('button', null, '\u2715 Remove Screenshot');
       (function (t) {
         removeScreenshotBtn.addEventListener('click', function () {
           fetch(API_URL + '/' + t.id + '/screenshot', { method: 'DELETE' })
             .then(function (r) { return r.json(); })
             .then(function (d) { if (d.success) { fetchTasks(); } })
             .catch(function (err) { console.error('[Proto Studio]', err); });
-          if (popover) { popover.remove(); popover = null; }
+          if (editModal) { editModal.remove(); editModal = null; }
         });
       })(task);
       screenshotSection.appendChild(removeScreenshotBtn);
     }
 
-    var editBtn = el('button', null, '\ud83d\udcf7 ' + (task.screenshot ? 'Replace' : 'Add') + ' Screenshot');
-    var btnUpdate = el('button', { className: 'btn-primary' }, 'Update');
+    // ── Footer: save / cancel / screenshot ───────────────────────────
+    var btnSave   = el('button', { className: 'btn-primary' }, 'Save');
     var btnCancel = el('button', null, 'Cancel');
-    var actions = el('div', { className: 'popover-actions' }, btnUpdate, btnCancel, editBtn);
+    var btnShot   = el('button', null, '\ud83d\udcf7 ' + (task.screenshot ? 'Replace Screenshot' : 'Add Screenshot'));
+    var footer = el('div', { className: 'modal-footer' }, btnSave, btnCancel, screenshotSection, btnShot);
 
-    popover = el('div', { className: 'proto-popover' }, label, titleInput, statusSelect, textarea, screenshotSection, actions);
-    popover.style.left = Math.max(10, window.innerWidth / 2 - 200) + 'px';
-    popover.style.top = Math.max(10, window.innerHeight / 2 - 200) + 'px';
+    var modal = el('div', { className: 'proto-modal' }, header, tabs, body, footer);
+    var backdrop = el('div', { className: 'proto-modal-backdrop' }, modal);
 
-    root.appendChild(popover);
+    editModal = backdrop;
+    root.appendChild(editModal);
     titleInput.focus();
 
-    var editCaptureBase64 = null;
-    editBtn.addEventListener('click', function () {
-      if (popover) popover.style.visibility = 'hidden';
+    // Close on backdrop click (but not modal content)
+    backdrop.addEventListener('click', function (e) {
+      if (e.target === backdrop) { backdrop.remove(); editModal = null; }
+    });
+
+    // Screenshot capture
+    btnShot.addEventListener('click', function () {
+      backdrop.style.display = 'none';
       startAreaCapture(function (b64) {
-        if (popover) popover.style.visibility = '';
+        backdrop.style.display = '';
         if (!b64) return;
         editCaptureBase64 = b64;
-        screenshotSection.innerHTML = '<img src="data:image/png;base64,' + b64 + '" style="max-width:100%;border-radius:4px;margin-top:6px;border:1px solid #334155;display:block;" />';
-        editBtn.textContent = '\ud83d\udcf7 Replace Screenshot';
+        screenshotSection.innerHTML = '<img src="data:image/png;base64,' + b64 + '" style="max-height:60px;border-radius:4px;border:1px solid #334155;" />';
+        btnShot.textContent = '\ud83d\udcf7 Replace Screenshot';
       });
     });
 
-    btnUpdate.addEventListener('click', function () {
+    // Save
+    btnSave.addEventListener('click', function () {
       var newTitle = titleInput.value.trim();
       if (!newTitle) return;
-
-      var patchBody = {
-        title: newTitle,
-        status: statusSelect.value,
-        description: textarea.value.trim(),
-      };
 
       fetch(API_URL + '/' + task.id, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(patchBody),
+        body: JSON.stringify({
+          title: newTitle,
+          status: statusSelect.value,
+          description: textarea.value.trim(),
+        }),
       })
         .then(function (r) { return r.json(); })
         .then(function (d) {
@@ -526,10 +600,17 @@ export function getOverlayScript(port: number): string {
         })
         .catch(function (err) { console.error('[Proto Studio]', err); });
 
-      popover.remove(); popover = null;
+      backdrop.remove(); editModal = null;
     });
 
-    btnCancel.addEventListener('click', function () { popover.remove(); popover = null; });
+    btnCancel.addEventListener('click', function () { backdrop.remove(); editModal = null; });
+
+    // Keyboard: Escape closes, Ctrl+Enter saves
+    document.addEventListener('keydown', function onModalKey(e) {
+      if (!editModal) { document.removeEventListener('keydown', onModalKey); return; }
+      if (e.key === 'Escape') { backdrop.remove(); editModal = null; document.removeEventListener('keydown', onModalKey); }
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { btnSave.click(); document.removeEventListener('keydown', onModalKey); }
+    });
   }
 
   // ── Annotation popover (create new task) ─────────────────────────────
@@ -829,7 +910,7 @@ export function getOverlayScript(port: number): string {
 
       var editBtn = el('button', { className: 'edit-btn' }, '\u270f Edit');
       (function (t) {
-        editBtn.addEventListener('click', function (e) { e.stopPropagation(); showEditPopover(t); });
+        editBtn.addEventListener('click', function (e) { e.stopPropagation(); showEditModal(t); });
       })(task);
 
       if (task.status !== 'done') {

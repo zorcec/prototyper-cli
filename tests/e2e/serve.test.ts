@@ -622,3 +622,154 @@ describe("proto serve — proxy mode (URL target)", () => {
     expect(res.headers.get("access-control-allow-origin")).toBe("*");
   });
 });
+
+// ── Regression tests: bugs found during dogfooding ───────────────────────────
+// These tests reproduce the exact failure modes reported, using `serve` just as
+// the real CLI does — serving a directory or a single-file prototype.
+
+describe("proto serve — regression: pageRoutes ReferenceError (dir mode)", () => {
+  let tempDir: string;
+  let instance: ServeInstance | null = null;
+
+  beforeEach(() => {
+    tempDir = mkdtempSync(join(tmpdir(), "proto-e2e-pages-"));
+  });
+
+  afterEach(async () => {
+    if (instance) {
+      await instance.close();
+      instance = null;
+    }
+    rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  it("does NOT crash (ReferenceError: pageRoutes is not defined) when serving a directory", async () => {
+    // Before the fix, `const pageRoutes` was swallowed by a // comment on the
+    // same line, causing `ReferenceError: pageRoutes is not defined` at startup.
+    writeFileSync(join(tempDir, "index.html"), SAMPLE_HTML, "utf-8");
+    writeFileSync(
+      join(tempDir, "details.html"),
+      SAMPLE_HTML.replace("Hello World", "Details"),
+      "utf-8",
+    );
+
+    // Must not throw
+    await expect(
+      serve(tempDir, { port: 9720, open: false }),
+    ).resolves.toBeDefined();
+
+    instance = await serve(tempDir, { port: 9721, open: false });
+    const res = await fetch(`http://localhost:9721/index.html`);
+    expect(res.ok).toBe(true);
+  });
+
+  it("GET /api/pages returns the list of HTML files when serving a directory", async () => {
+    writeFileSync(join(tempDir, "index.html"), SAMPLE_HTML, "utf-8");
+    writeFileSync(
+      join(tempDir, "map.html"),
+      SAMPLE_HTML.replace("Hello World", "Map"),
+      "utf-8",
+    );
+
+    instance = await serve(tempDir, { port: 9722, open: false });
+
+    const res = await fetch("http://localhost:9722/api/pages");
+    expect(res.ok).toBe(true);
+    const body = await res.json() as { pages: string[] };
+    expect(body.pages).toContain("/index.html");
+    expect(body.pages).toContain("/map.html");
+    expect(body.pages).toHaveLength(2);
+  });
+
+  it("GET /api/pages returns empty array when serving a single HTML file", async () => {
+    const filePath = join(tempDir, "index.html");
+    writeFileSync(filePath, SAMPLE_HTML, "utf-8");
+
+    instance = await serve(filePath, { port: 9723, open: false });
+
+    const res = await fetch("http://localhost:9723/api/pages");
+    expect(res.ok).toBe(true);
+    const body = await res.json() as { pages: string[] };
+    expect(body.pages).toEqual([]);
+  });
+
+  it("GET /api/pages returns empty array in API-only mode", async () => {
+    const apiInstance = await serve(undefined, { port: 9724, open: false });
+    try {
+      const res = await fetch("http://localhost:9724/api/pages");
+      expect(res.ok).toBe(true);
+      const body = await res.json() as { pages: string[] };
+      expect(body.pages).toEqual([]);
+    } finally {
+      await apiInstance.close();
+    }
+  });
+});
+
+describe("proto serve — regression: overlay SyntaxError (Unexpected token ',')", () => {
+  let tempDir: string;
+  let instance: ServeInstance | null = null;
+
+  beforeEach(() => {
+    tempDir = mkdtempSync(join(tmpdir(), "proto-e2e-overlay-syntax-"));
+  });
+
+  afterEach(async () => {
+    if (instance) {
+      await instance.close();
+      instance = null;
+    }
+    rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  it("overlay script served at /proto-overlay.js is valid JavaScript (no SyntaxError)", async () => {
+    // Before the fix, /^\/\/ compiled to /^// — the // started a JS comment,
+    // causing 'Unexpected token ,' in the browser when the script was evaluated.
+    const filePath = join(tempDir, "index.html");
+    writeFileSync(filePath, SAMPLE_HTML, "utf-8");
+
+    instance = await serve(filePath, { port: 9725, open: false });
+
+    const res = await fetch("http://localhost:9725/proto-overlay.js");
+    expect(res.ok).toBe(true);
+    const script = await res.text();
+
+    // Perform the exact same check the browser does: parse as a function body
+    expect(() => new Function(script)).not.toThrow();
+  });
+
+  it("overlay script does not contain the literal '//' inside a regex (the broken pattern)", async () => {
+    // The broken form was: page.replace(/^//, '') where // becomes a comment
+    const filePath = join(tempDir, "index.html");
+    writeFileSync(filePath, SAMPLE_HTML, "utf-8");
+
+    instance = await serve(filePath, { port: 9726, open: false });
+
+    const res = await fetch("http://localhost:9726/proto-overlay.js");
+    const script = await res.text();
+
+    // The broken regex would appear as /^// in the script
+    expect(script).not.toContain("/^//");
+  });
+
+  it("overlay script injected into HTML is valid JavaScript", async () => {
+    writeFileSync(join(tempDir, "page1.html"), SAMPLE_HTML, "utf-8");
+    writeFileSync(
+      join(tempDir, "page2.html"),
+      SAMPLE_HTML.replace("Hello World", "Page 2"),
+      "utf-8",
+    );
+
+    instance = await serve(tempDir, { port: 9727, open: false });
+
+    // The HTML pages should have the overlay injected inline
+    const res = await fetch("http://localhost:9727/page1.html");
+    const html = await res.text();
+
+    // Extract the injected script content
+    const match = html.match(/<script data-proto-overlay[^>]*>([\s\S]*?)<\/script>/);
+    expect(match).not.toBeNull();
+    const inlineScript = match![1];
+    expect(() => new Function(inlineScript)).not.toThrow();
+  });
+});

@@ -506,8 +506,10 @@ li{margin:8px 0}</style></head>
     });
   }
 
-  // ── Task API ─────────────────────────────────────────────────────────────  const pageRoutes = htmlFiles.map((f) => `/${basename(f)}`);
-  registerPagesApi(app, isDir ? pageRoutes : []);  registerTaskApi(app, projectDir, broadcast);
+  // ── Task API ─────────────────────────────────────────────────────────────
+  const pageRoutes = htmlFiles.map((f) => `/${basename(f)}`);
+  registerPagesApi(app, isDir ? pageRoutes : []);
+  registerTaskApi(app, projectDir, broadcast);
 
   // Legacy annotation API (backward compat with old overlay/tests)
   app.post("/api/annotate", (req, res) => {
@@ -518,7 +520,7 @@ li{margin:8px 0}</style></head>
       text?: string;
     };
 
-    if (!file || !targetSelector || !tag || !text) {
+    if (!file || !targetSelector || !text) {
       res.status(400).json({ error: "Missing required fields" });
       return;
     }
