@@ -376,3 +376,115 @@ describe("proto serve (e2e)", () => {
     expect(uploadData.screenshot).toBe(`${task.id}.png`);
   });
 });
+
+// ── API-only mode (no target / existing hosted project) ───────────────────
+describe("proto serve — API-only mode (no target)", () => {
+  let instance: ServeInstance | null = null;
+  let tempDir: string;
+
+  beforeEach(() => {
+    tempDir = mkdtempSync(join(tmpdir(), "proto-api-only-"));
+  });
+
+  afterEach(async () => {
+    if (instance) {
+      await instance.close();
+      instance = null;
+    }
+    rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  it("starts without a target and serves the task API", async () => {
+    // Pass undefined explicitly; serve resolves projectDir from process.cwd()
+    // We override cwd for this test by using the overloaded serve with the
+    // internal serveApiOnly path — the public API accepts undefined.
+    instance = await serve(undefined, { port: 3780, open: false });
+    expect(instance.url).toBe("http://localhost:3780");
+
+    const res = await fetch("http://localhost:3780/api/tasks");
+    expect(res.ok).toBe(true);
+    const data = await res.json();
+    expect(Array.isArray(data.tasks)).toBe(true);
+  });
+
+  it("API-only mode: creates and retrieves tasks", async () => {
+    instance = await serve(undefined, { port: 3781, open: false });
+
+    const createRes = await fetch("http://localhost:3781/api/tasks", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title: "API-only task",
+        tag: "TODO",
+        selector: '[data-testid="submit-btn"]',
+        url: "http://localhost:5173/checkout",
+      }),
+    });
+    const result = await createRes.json();
+    expect(result.success).toBe(true);
+    expect(result.task.title).toBe("API-only task");
+    expect(result.task.url).toBe("http://localhost:5173/checkout");
+  });
+
+  it("API-only mode: does not serve HTML (/ returns 404)", async () => {
+    instance = await serve(undefined, { port: 3782, open: false });
+
+    const res = await fetch("http://localhost:3782/");
+    expect(res.status).toBe(404);
+  });
+
+  it("API-only mode: PATCH updates task status", async () => {
+    instance = await serve(undefined, { port: 3783, open: false });
+
+    const createRes = await fetch("http://localhost:3783/api/tasks", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title: "Status test",
+        tag: "FEATURE",
+        selector: '[data-testid="nav-home"]',
+      }),
+    });
+    const { task } = await createRes.json();
+
+    const patchRes = await fetch(`http://localhost:3783/api/tasks/${task.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: "done" }),
+    });
+    const patchData = await patchRes.json();
+    expect(patchData.success).toBe(true);
+    expect(patchData.task.status).toBe("done");
+  });
+
+  it("API-only mode: DELETE removes a task", async () => {
+    instance = await serve(undefined, { port: 3784, open: false });
+
+    const createRes = await fetch("http://localhost:3784/api/tasks", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title: "Delete me",
+        tag: "TODO",
+        selector: '[data-testid="delete-btn"]',
+      }),
+    });
+    const { task } = await createRes.json();
+
+    const deleteRes = await fetch(`http://localhost:3784/api/tasks/${task.id}`, {
+      method: "DELETE",
+    });
+    expect(deleteRes.ok).toBe(true);
+
+    const listRes = await fetch("http://localhost:3784/api/tasks");
+    const listData = await listRes.json();
+    expect(listData.tasks.every((t: { id: string }) => t.id !== task.id)).toBe(true);
+  });
+
+  it("API-only mode: creates .proto dirs in process.cwd()", async () => {
+    instance = await serve(undefined, { port: 3785, open: false });
+
+    const { existsSync } = await import("node:fs");
+    expect(existsSync(join(process.cwd(), ".proto", "tasks"))).toBe(true);
+  });
+});

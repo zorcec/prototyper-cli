@@ -23,6 +23,5 @@ Mark implemented tasks as you proceed. Make sure to update the TESTING.md docume
 [x] improve unit tests coverage; >85% per files
 [x] improve the overlay filter, There should be a legend what should be shown what not. FIlter applies to both overlay icons and tasks sidebar
 [x] add to instructions that the product should always use test-id and our proto should fallback to it if the proto-id is not available, that way we can be sure that the tasks will be always added to the right place, even if the selector is not perfect. Add this to the prototype-rules.md. Also, inside the task add the URL where the task is/item is located.
-
-[] check an implement all tasks that are left in "/home/zorcec/workspace/home-finder/docs/real-estate-reference/prototype/.proto/tasks.md"
-  - before implementation read: /home/zorcec/workspace/home-finder/docs/real-estate-reference/prototype/prototype-rules.md
+[x] make it usuable in an existing project that is served/hosted already. If serve command doesnt have any path set then it just serves the API so chrome extension will work.
+[] The overlay when protoy serve on hte existing app is not really working. I'm not able to add tasks, also the side overlay is not poping up. Test all features e2e in this mode (serve in an app that is already served) and fix all issues that are there. This is a very important use case, my main use case is to use it in an existing project, so this needs to be working flawlessly.

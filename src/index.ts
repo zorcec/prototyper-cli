@@ -41,10 +41,10 @@ program
 program
   .command("serve")
   .description("Serve HTML prototype(s) or task API server with overlay")
-  .argument("<target>", "HTML file or directory containing HTML files")
+  .argument("[target]", "HTML file or directory containing HTML files (omit to run API-only for use with an existing hosted project)")
   .option("-p, --port <port>", "Port number", "3700")
   .option("--no-open", "Do not open browser automatically")
-  .action(async (target: string, opts: { port: string; open: boolean }) => {
+  .action(async (target: string | undefined, opts: { port: string; open: boolean }) => {
     await serve(target, {
       port: parseInt(opts.port, 10),
       open: opts.open,

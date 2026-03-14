@@ -84,16 +84,40 @@ proto init .          # initialize in current directory
 proto init my-app     # initialize in a new subdirectory
 ```
 
-### `proto serve <target>`
+### `proto serve [target]`
 
 Serve an HTML file or a directory of HTML files with live annotation overlay.
+If no target is given, the server runs in **API-only mode** — no HTML is served,
+but the full task API and WebSocket server start up so the Chrome extension can
+connect and annotate any existing hosted project.
 
 ```bash
 proto serve .                  # serve all HTML files in current directory
 proto serve dashboard.html     # serve a single file
 proto serve -p 4000 .          # custom port
 proto serve --no-open .        # don't open browser automatically
+proto serve                    # API-only mode — use with an existing project
+proto serve -p 4000            # API-only on a custom port
 ```
+
+#### Using Proto Studio with an existing project
+
+If you have a running web app (e.g. a Next.js dev server on `localhost:3000`) you
+can attach Proto Studio without replacing your server:
+
+```bash
+# In your project root (run once to set up .proto/ and scripts):
+proto attach .
+
+# Then start the Proto API server (no HTML target needed):
+proto serve
+
+# Or on a custom port:
+proto serve -p 4000
+```
+
+The Chrome extension will automatically connect to `http://localhost:3700` (or
+whatever port you choose) and let you annotate any page your existing app serves.
 
 ### `proto export <target>`
 
