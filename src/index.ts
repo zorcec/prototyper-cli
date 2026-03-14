@@ -4,7 +4,8 @@ import { attachProject } from "./commands/attach.js";
 import { serve } from "./server/server.js";
 import { exportFile, exportDirectory, exportTasks, isDirectory as isDir } from "./commands/export.js";
 import { validateFile, validateDirectory, isDirectory as isDir2 } from "./commands/validate.js";
-import { listTasks } from "./core/tasks.js";
+import { listTasks, updateTask } from "./core/tasks.js";
+import type { Task, TaskStatus } from "./core/types.js";
 import { writeFileSync } from "node:fs";
 import chalk from "chalk";
 
@@ -117,10 +118,70 @@ program
 
 program
   .command("tasks")
-  .description("List all tasks in the project")
+  .description("List or edit tasks in the project")
   .argument("[dir]", "Project root directory", ".")
   .option("--status <status>", "Filter by status (todo, in-progress, done)")
-  .action((dir: string, opts: { status?: string }) => {
+  .option("--edit [task-id]", "Edit a task by ID (LLM-friendly). Omit task-id to see usage instructions.")
+  .option("--title <title>", "New title for the task (use with --edit)")
+  .option("--set-status <status>", "New status: todo | in-progress | done (use with --edit)")
+  .option("--description <text>", "New description for the task (use with --edit)")
+  .action((dir: string, opts: {
+    status?: string;
+    edit?: string | boolean;
+    title?: string;
+    setStatus?: string;
+    description?: string;
+  }) => {
+    // ── Edit mode ──────────────────────────────────────────────────────
+    if (opts.edit !== undefined) {
+      const taskId = typeof opts.edit === "string" ? opts.edit : undefined;
+      const hasEdits = opts.title || opts.setStatus || opts.description;
+
+      if (!taskId || !hasEdits) {
+        const all = listTasks(dir);
+        console.log(chalk.bold("proto tasks --edit — LLM Usage Instructions"));
+        console.log();
+        console.log("Edit a task:");
+        console.log(chalk.cyan("  proto tasks [dir] --edit <task-id> [--title \"new title\"] [--set-status todo|in-progress|done] [--description \"new description\"]"));
+        console.log();
+        console.log("Examples:");
+        console.log(chalk.dim("  proto tasks --edit abc12345 --set-status done"));
+        console.log(chalk.dim("  proto tasks --edit abc12345 --title \"Updated title\" --description \"More detail\""));
+        console.log();
+        if (all.length === 0) {
+          console.log(chalk.dim("No tasks found."));
+        } else {
+          console.log("Available tasks:");
+          const colorMap: Record<string, (s: string) => string> = {
+            todo: chalk.yellow,
+            "in-progress": chalk.blue,
+            done: chalk.green,
+          };
+          for (const task of all) {
+            const colorFn = colorMap[task.status] || chalk.white;
+            console.log(`  ${colorFn(`[${task.status}]`)} ${chalk.bold(task.id)} — ${task.title}`);
+          }
+        }
+        return;
+      }
+
+      const updates: Partial<Pick<Task, "status" | "title" | "description">> = {};
+      if (opts.title) updates.title = opts.title;
+      if (opts.setStatus) updates.status = opts.setStatus as TaskStatus;
+      if (opts.description) updates.description = opts.description;
+
+      const updated = updateTask(dir, taskId, updates);
+      if (!updated) {
+        console.log(chalk.red(`Task not found: ${taskId}`));
+        process.exitCode = 1;
+        return;
+      }
+      console.log(chalk.green(`✓ Task updated: ${updated.title}`));
+      console.log(chalk.dim(`  id: ${updated.id} | status: ${updated.status}`));
+      return;
+    }
+
+    // ── List mode ──────────────────────────────────────────────────────
     let filtered = listTasks(dir);
 
     if (opts.status) filtered = filtered.filter((t) => t.status === opts.status);

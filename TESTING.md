@@ -41,11 +41,21 @@ npx vitest run --config vitest.pw.config.ts
 | Config read/write | ✅ `tests/unit/config.test.ts` | — |
 | Tasks core (CRUD, list/filter) | ✅ `tests/unit/tasks.test.ts` | — |
 | Page-specific overlay dots (filter by `location.pathname`) | ✅ `tests/unit/overlay.test.ts` | — |
+| Sidebar URL filtering (`pageTasks`, "N tasks on other pages" hint) | ✅ `tests/unit/overlay.test.ts` | ✅ `tests/e2e/serve.test.ts` |
+| Edit modal button design (`btn-primary`, `btn-ghost`, `btn-screenshot`) | ✅ `tests/unit/overlay.test.ts` | — |
+| Screenshot UI in modal (hover-to-reveal remove overlay, sidebar thumbnail) | ✅ `tests/unit/overlay.test.ts` | — |
+| Screenshot visible in indicator tooltip | ✅ `tests/unit/overlay.test.ts` | — |
+| Screenshot hover-to-remove overlay in sidebar (no edit modal required) | ✅ `tests/unit/overlay.test.ts` | — |
+| Task card click opens edit modal directly (no Edit button needed) | ✅ `tests/unit/overlay.test.ts` | — |
 | `data-testid` / `id` anchor in CSS selector (`buildElementSelector`) | ✅ `tests/unit/overlay.test.ts` | — |
 | Page / variant switcher (`GET /api/pages` + `renderPageSwitcher`) | ✅ `tests/unit/overlay.test.ts` | ✅ `tests/e2e/serve.test.ts` |
 | `proto tasks` — show full YAML front matter | — | ✅ `tests/e2e/serve.test.ts` |
+| `proto tasks --edit` — LLM-friendly task editing | — | ✅ `tests/e2e/init.test.ts` |
 | Full-screen task edit modal (2-tab: Edit + Preview) | ✅ `tests/unit/overlay.test.ts` | — |
 | Markdown renderer (`renderMarkdown`) | ✅ `tests/unit/overlay.test.ts` | — |
+| Overlay indicators hidden for off-screen elements (viewport check) | ✅ `tests/unit/overlay.test.ts` | — |
+| Single-task indicator click opens edit modal directly | ✅ `tests/unit/overlay.test.ts` | — |
+| Multi-task indicator click pins tooltip for task selection | ✅ `tests/unit/overlay.test.ts` | — |
 | Regression: `pageRoutes is not defined` crash (dir mode) | — | ✅ `tests/e2e/serve.test.ts` |
 | Regression: overlay `Unexpected token ','` SyntaxError | ✅ `tests/unit/overlay.test.ts` | ✅ `tests/e2e/serve.test.ts` |
 

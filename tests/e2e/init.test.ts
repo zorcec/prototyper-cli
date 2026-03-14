@@ -245,6 +245,58 @@ describe("proto tasks (e2e)", () => {
     const output = run(`tasks ${tempDir} --status todo`);
     expect(output).toContain("No tasks found");
   });
+
+  it("--edit with no task-id prints LLM usage instructions", () => {
+    const output = run(`tasks ${tempDir} --edit`);
+    expect(output).toContain("LLM Usage Instructions");
+    expect(output).toContain("--edit <task-id>");
+    expect(output).toContain("--set-status");
+  });
+
+  it("--edit with task-id but no fields also prints LLM usage instructions", () => {
+    const output = run(`tasks ${tempDir} --edit abc12345`);
+    expect(output).toContain("LLM Usage Instructions");
+    // With no tasks in the project it shows "No tasks found."
+    expect(output).toContain("No tasks found");
+  });
+
+  it("--edit updates task title and status", () => {
+    // Create a task file manually
+    const { mkdirSync, writeFileSync } = require("node:fs");
+    const tasksDir = join(tempDir, ".proto", "tasks");
+    mkdirSync(tasksDir, { recursive: true });
+    writeFileSync(join(tasksDir, "my-task.md"), [
+      "---",
+      "id: test1234",
+      "status: todo",
+      'selector: "#btn"',
+      "created: 2025-01-01T00:00:00.000Z",
+      "---",
+      "",
+      "# Original Title",
+      "",
+      "Original description.",
+    ].join("\n"), "utf-8");
+
+    const output = run(`tasks ${tempDir} --edit test1234 --title "Updated Title" --set-status in-progress`);
+    expect(output).toContain("Task updated");
+    expect(output).toContain("Updated Title");
+
+    // Verify the file was actually updated
+    const listOutput = run(`tasks ${tempDir}`);
+    expect(listOutput).toContain("Updated Title");
+    expect(listOutput).toContain("in-progress");
+  });
+
+  it("--edit with unknown task-id exits with error code 1", () => {
+    let threw = false;
+    try {
+      run(`tasks ${tempDir} --edit nonexist --title "Foo"`);
+    } catch {
+      threw = true;
+    }
+    expect(threw).toBe(true);
+  });
 });
 
 describe("proto archive (e2e) — removed", () => {

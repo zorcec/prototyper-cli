@@ -174,11 +174,35 @@ describe("getOverlayScript", () => {
     expect(script).toContain("tooltip-close-btn");
   });
 
-  it("includes screenshot removal in edit popover", () => {
+  it("includes screenshot UI in edit modal", () => {
     const script = getOverlayScript(3700);
-    expect(script).toContain("removeScreenshotBtn");
-    expect(script).toContain("remove-screenshot-btn");
-    expect(script).toContain("/screenshot");
+    expect(script).toContain("buildScreenshotContainer");
+    expect(script).toContain("screenshot-container");
+    expect(script).toContain("screenshot-remove-overlay");
+    expect(script).toContain("modal-screenshot-section");
+    expect(script).toContain("/screenshot"); // DELETE /screenshot endpoint
+  });
+
+  it("edit modal footer has styled button classes", () => {
+    const script = getOverlayScript(3700);
+    expect(script).toContain("btn-primary");
+    expect(script).toContain("btn-ghost");
+    expect(script).toContain("btn-screenshot");
+    expect(script).toContain("modal-footer-left");
+    expect(script).toContain("modal-footer-right");
+  });
+
+  it("sidebar filters tasks by current page URL and shows other-pages hint", () => {
+    const script = getOverlayScript(3700);
+    // refreshSidebar must apply URL filter (same as renderIndicators)
+    expect(script).toContain("other-pages-hint");
+    expect(script).toContain("otherPagesCount");
+    // pageTasks is used for sidebar rendering (not raw `tasks` array)
+    const refreshFnIdx = script.indexOf("function refreshSidebar");
+    expect(refreshFnIdx).toBeGreaterThan(-1);
+    const afterRefresh = script.slice(refreshFnIdx, refreshFnIdx + 600);
+    expect(afterRefresh).toContain("pageTasks");
+    expect(afterRefresh).toContain("location.pathname");
   });
 
   it("includes captureArea with Chrome extension API fallback", () => {
@@ -276,5 +300,34 @@ describe("getOverlayScript", () => {
     const script = getOverlayScript(3700);
     expect(script).toContain("Escape");
     expect(script).toContain("ctrlKey");
+  });
+
+  it("renderIndicators skips elements outside the viewport", () => {
+    const script = getOverlayScript(3700);
+    // Viewport visibility check must be present in renderIndicators
+    expect(script).toContain("vpW");
+    expect(script).toContain("vpH");
+    expect(script).toContain("rect.bottom < 0");
+    expect(script).toContain("rect.top > vpH");
+    expect(script).toContain("rect.right < 0");
+    expect(script).toContain("rect.left > vpW");
+  });
+
+  it("single-task indicator click opens edit modal directly without tooltip", () => {
+    const script = getOverlayScript(3700);
+    // The click handler must branch on grp.length === 1
+    expect(script).toContain("grp.length === 1");
+    // Single task: open edit modal directly
+    expect(script).toContain("showEditModal(grp[0])");
+  });
+
+  it("multi-task indicator click still pins tooltip for selection", () => {
+    const script = getOverlayScript(3700);
+    // Multi-task branch must still pin tooltip
+    const clickIdx = script.indexOf("grp.length === 1");
+    expect(clickIdx).toBeGreaterThan(-1);
+    // After the single-task branch there must be a tooltipPinned = true
+    const afterClick = script.slice(clickIdx, clickIdx + 500);
+    expect(afterClick).toContain("tooltipPinned = true");
   });
 });

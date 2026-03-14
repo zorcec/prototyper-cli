@@ -340,16 +340,22 @@ export function getOverlayScript(port: number): string {
       var header = el('div', { className: 'task-card-header' }, statusBadge);
       var titleEl = el('div', { className: 'task-title' }, task.title || 'Untitled');
 
-      var editBtn = el('button', { className: 'edit-btn' }, '\u270f Edit');
+      var card = el('div', { className: 'task-card' }, header, titleEl);
+
+      if (task.screenshot) {
+        var thumbContainer = el('div', { className: 'task-screenshot-thumb' });
+        var thumbImg = el('img', { src: '/screenshots/' + task.screenshot });
+        thumbContainer.appendChild(thumbImg);
+        card.appendChild(thumbContainer);
+      }
+
       (function (t) {
-        editBtn.addEventListener('click', function () {
-          hideIndicatorTooltip();
+        card.addEventListener('click', function () {
+          forceHideTooltip();
           showEditModal(t);
         });
       })(task);
 
-      var itemActions = el('div', { className: 'task-actions' }, editBtn);
-      var card = el('div', { className: 'task-card' }, header, titleEl, itemActions);
       tooltip.appendChild(card);
     }
 
@@ -395,6 +401,11 @@ export function getOverlayScript(port: number): string {
       var rect = targetEl.getBoundingClientRect();
       if (rect.width === 0 && rect.height === 0) continue;
 
+      // Skip elements not currently visible in the viewport
+      var vpW = window.innerWidth || document.documentElement.clientWidth;
+      var vpH = window.innerHeight || document.documentElement.clientHeight;
+      if (rect.bottom < 0 || rect.top > vpH || rect.right < 0 || rect.left > vpW) continue;
+
       var activeTasks = group.filter(function (t) { return t.status !== 'done'; });
       var allDone = activeTasks.length === 0;
       if (allDone && !sidebarShowDone) continue;
@@ -417,9 +428,16 @@ export function getOverlayScript(port: number): string {
         });
         indicator.addEventListener('click', function (e) {
           e.stopPropagation();
-          forceHideTooltip();
-          showIndicatorTooltip(indicator, grp);
-          tooltipPinned = true;
+          if (grp.length === 1) {
+            // Single task: open edit modal directly (no tooltip needed)
+            forceHideTooltip();
+            showEditModal(grp[0]);
+          } else {
+            // Multiple tasks: pin tooltip so user can select which task to edit
+            forceHideTooltip();
+            showIndicatorTooltip(indicator, grp);
+            tooltipPinned = true;
+          }
         });
 
         indicatorContainer.appendChild(indicator);
@@ -524,31 +542,49 @@ export function getOverlayScript(port: number): string {
       refreshPreview();
     });
 
-    // ── Screenshot section ────────────────────────────────────────────
+    // ── Screenshot section (in modal body, below editor/preview) ────────────
     var editCaptureBase64 = null;
-    var screenshotSection = el('div', { className: 'screenshot-preview' });
-    if (task.screenshot) {
-      var screenshotImg = el('img', { src: '/screenshots/' + task.screenshot });
-      screenshotImg.style.cssText = 'max-height:60px;border-radius:4px;border:1px solid #334155;';
-      screenshotSection.appendChild(screenshotImg);
-      var removeScreenshotBtn = el('button', null, '\u2715 Remove Screenshot');
-      (function (t) {
-        removeScreenshotBtn.addEventListener('click', function () {
-          fetch(API_URL + '/' + t.id + '/screenshot', { method: 'DELETE' })
+    var screenshotSection = el('div', { className: 'modal-screenshot-section' });
+
+    function buildScreenshotContainer(src, isCapture) {
+      var container = el('div', { className: 'screenshot-container' });
+      var img = el('img', { src: src });
+      var overlay = el('div', { className: 'screenshot-remove-overlay' });
+      var removeBtn = el('button', null, '\u2715 Remove');
+      removeBtn.addEventListener('click', function (ev) {
+        ev.stopPropagation();
+        if (isCapture) {
+          editCaptureBase64 = null;
+          screenshotSection.replaceChildren();
+          btnShot.textContent = '\ud83d\udcf7 Add Screenshot';
+        } else {
+          fetch(API_URL + '/' + task.id + '/screenshot', { method: 'DELETE' })
             .then(function (r) { return r.json(); })
-            .then(function (d) { if (d.success) { fetchTasks(); } })
+            .then(function (d) {
+              if (d.success) { screenshotSection.replaceChildren(); btnShot.textContent = '\ud83d\udcf7 Add Screenshot'; fetchTasks(); }
+            })
             .catch(function (err) { console.error('[Proto Studio]', err); });
-          if (editModal) { editModal.remove(); editModal = null; }
-        });
-      })(task);
-      screenshotSection.appendChild(removeScreenshotBtn);
+        }
+      });
+      overlay.appendChild(removeBtn);
+      container.appendChild(img);
+      container.appendChild(overlay);
+      return container;
     }
 
-    // ── Footer: save / cancel / screenshot ───────────────────────────
+    if (task.screenshot) {
+      screenshotSection.appendChild(buildScreenshotContainer('/screenshots/' + task.screenshot, false));
+    }
+
+    body.appendChild(screenshotSection);
+
+    // ── Footer: save / cancel | screenshot ───────────────────────────
     var btnSave   = el('button', { className: 'btn-primary' }, 'Save');
-    var btnCancel = el('button', null, 'Cancel');
-    var btnShot   = el('button', null, '\ud83d\udcf7 ' + (task.screenshot ? 'Replace Screenshot' : 'Add Screenshot'));
-    var footer = el('div', { className: 'modal-footer' }, btnSave, btnCancel, screenshotSection, btnShot);
+    var btnCancel = el('button', { className: 'btn-ghost' }, 'Cancel');
+    var btnShot   = el('button', { className: 'btn-screenshot' }, '\ud83d\udcf7 ' + (task.screenshot ? 'Replace Screenshot' : 'Add Screenshot'));
+    var footerLeft  = el('div', { className: 'modal-footer-left' }, btnSave, btnCancel);
+    var footerRight = el('div', { className: 'modal-footer-right' }, btnShot);
+    var footer = el('div', { className: 'modal-footer' }, footerLeft, footerRight);
 
     var modal = el('div', { className: 'proto-modal' }, header, tabs, body, footer);
     var backdrop = el('div', { className: 'proto-modal-backdrop' }, modal);
@@ -569,7 +605,8 @@ export function getOverlayScript(port: number): string {
         backdrop.style.display = '';
         if (!b64) return;
         editCaptureBase64 = b64;
-        screenshotSection.innerHTML = '<img src="data:image/png;base64,' + b64 + '" style="max-height:60px;border-radius:4px;border:1px solid #334155;" />';
+        screenshotSection.replaceChildren();
+        screenshotSection.appendChild(buildScreenshotContainer('data:image/png;base64,' + b64, true));
         btnShot.textContent = '\ud83d\udcf7 Replace Screenshot';
       });
     });
@@ -854,8 +891,13 @@ export function getOverlayScript(port: number): string {
     var closeBtn = el('span', { className: 'sidebar-close' }, '\u2715');
     closeBtn.addEventListener('click', function () { sidebar.classList.remove('open'); sidebarPinned = false; });
 
-    var todoCount = tasks.filter(function (t) { return t.status !== 'done'; }).length;
-    sidebar.appendChild(el('h3', null, 'Tasks (' + todoCount + '/' + tasks.length + ')', closeBtn));
+    // Task 1: filter tasks to current page URL (same rule as renderIndicators)
+    var currentPath = location.pathname;
+    var pageTasks = tasks.filter(function (t) { return !t.url || t.url === currentPath; });
+    var otherPagesCount = tasks.length - pageTasks.length;
+
+    var todoCount = pageTasks.filter(function (t) { return t.status !== 'done'; }).length;
+    sidebar.appendChild(el('h3', null, 'Tasks (' + todoCount + '/' + pageTasks.length + ')', closeBtn));
 
     // Legend / filter toggles
     var legendSection = el('div', { className: 'sidebar-legend' });
@@ -880,9 +922,12 @@ export function getOverlayScript(port: number): string {
     legendSection.appendChild(doneToggleBtn);
     sidebar.appendChild(legendSection);
 
-    var visibleTasks = sidebarShowDone ? tasks : tasks.filter(function (t) { return t.status !== 'done'; });
+    var visibleTasks = sidebarShowDone ? pageTasks : pageTasks.filter(function (t) { return t.status !== 'done'; });
     if (visibleTasks.length === 0) {
-      sidebar.appendChild(el('p', { className: 'empty-msg' }, tasks.length === 0 ? 'No tasks yet. Right-click or Alt+A to annotate.' : 'All done! Toggle "Show Done" to see completed tasks.'));
+      sidebar.appendChild(el('p', { className: 'empty-msg' }, pageTasks.length === 0 ? 'No tasks yet. Right-click or Alt+A to annotate.' : 'All done! Toggle "Show Done" to see completed tasks.'));
+      if (otherPagesCount > 0) {
+        sidebar.appendChild(el('p', { className: 'other-pages-hint' }, otherPagesCount + ' task' + (otherPagesCount > 1 ? 's' : '') + ' on other pages'));
+      }
       return;
     }
 
@@ -908,9 +953,31 @@ export function getOverlayScript(port: number): string {
         card.appendChild(el('div', { className: 'task-description' }, task.description.slice(0, 120)));
       }
 
-      var editBtn = el('button', { className: 'edit-btn' }, '\u270f Edit');
+      if (task.screenshot) {
+        var thumbContainer = el('div', { className: 'task-screenshot-thumb' });
+        var thumbImg = el('img', { src: '/screenshots/' + task.screenshot });
+        var removeOverlay = el('div', { className: 'screenshot-remove-overlay' });
+        var removeScreenshotBtn = el('button', null, '\u2715 Remove');
+        (function (t) {
+          removeScreenshotBtn.addEventListener('click', function (ev) {
+            ev.stopPropagation();
+            fetch(API_URL + '/' + t.id + '/screenshot', { method: 'DELETE' })
+              .then(function (r) { return r.json(); })
+              .then(function (d) { if (d.success) fetchTasks(); })
+              .catch(function (err) { console.error('[Proto Studio]', err); });
+          });
+        })(task);
+        removeOverlay.appendChild(removeScreenshotBtn);
+        thumbContainer.appendChild(thumbImg);
+        thumbContainer.appendChild(removeOverlay);
+        card.appendChild(thumbContainer);
+      }
+
       (function (t) {
-        editBtn.addEventListener('click', function (e) { e.stopPropagation(); showEditModal(t); });
+        card.addEventListener('click', function (e) {
+          if (e.target.closest && e.target.closest('.task-actions')) return;
+          showEditModal(t);
+        });
       })(task);
 
       if (task.status !== 'done') {
@@ -918,14 +985,18 @@ export function getOverlayScript(port: number): string {
         (function (id) { doneBtn.addEventListener('click', function (e) { e.stopPropagation(); markTaskDone(id); }); })(task.id);
         var deleteBtn = el('button', { className: 'delete-btn' }, '\u2715');
         (function (id) { deleteBtn.addEventListener('click', function (e) { e.stopPropagation(); removeTask(id); }); })(task.id);
-        card.appendChild(el('div', { className: 'task-actions' }, editBtn, doneBtn, deleteBtn));
+        card.appendChild(el('div', { className: 'task-actions' }, doneBtn, deleteBtn));
       } else {
         var deleteBtn2 = el('button', { className: 'delete-btn' }, '\u2715');
         (function (id) { deleteBtn2.addEventListener('click', function (e) { e.stopPropagation(); removeTask(id); }); })(task.id);
-        card.appendChild(el('div', { className: 'task-actions' }, editBtn, deleteBtn2));
+        card.appendChild(el('div', { className: 'task-actions' }, deleteBtn2));
       }
 
       sidebar.appendChild(card);
+    }
+
+    if (otherPagesCount > 0) {
+      sidebar.appendChild(el('p', { className: 'other-pages-hint' }, otherPagesCount + ' task' + (otherPagesCount > 1 ? 's' : '') + ' on other pages'));
     }
   }
 

@@ -773,3 +773,112 @@ describe("proto serve — regression: overlay SyntaxError (Unexpected token ',')
     expect(() => new Function(inlineScript)).not.toThrow();
   });
 });
+
+// ── URL-based task filtering (Task 1 regression) ─────────────────────────────
+// The sidebar should only show tasks whose `url` matches the current page path.
+// The overlay client filters client-side; the API stores and returns all tasks.
+//
+// This test verifies:
+//   1. Tasks are stored with their `url` field intact.
+//   2. The API returns all tasks regardless of URL (no server-side filtering).
+//   3. The injected overlay script contains the client-side URL-filter logic.
+
+describe("proto serve — task url field and overlay url-filtering", () => {
+  let tempDir: string;
+  let instance: ServeInstance | null = null;
+
+  beforeEach(() => {
+    tempDir = mkdtempSync(join(tmpdir(), "proto-e2e-urlfilter-"));
+  });
+
+  afterEach(async () => {
+    if (instance) {
+      await instance.close();
+      instance = null;
+    }
+    rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  it("stores url field on tasks and API returns all tasks regardless of url", async () => {
+    writeFileSync(join(tempDir, "page1.html"), SAMPLE_HTML, "utf-8");
+    writeFileSync(
+      join(tempDir, "page2.html"),
+      SAMPLE_HTML.replace("Hello World", "Page 2"),
+      "utf-8",
+    );
+
+    instance = await serve(tempDir, { port: 9728, open: false });
+
+    // Create task for page1
+    const r1 = await fetch("http://localhost:9728/api/tasks", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title: "Fix nav on page 1",
+        description: "",
+        selector: '[data-proto-id="nav"]',
+        url: "/page1.html",
+      }),
+    });
+    const d1 = await r1.json() as { success: boolean; task: { url?: string } };
+    expect(d1.success).toBe(true);
+    expect(d1.task.url).toBe("/page1.html");
+
+    // Create task for page2
+    const r2 = await fetch("http://localhost:9728/api/tasks", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title: "Fix footer on page 2",
+        description: "",
+        selector: '[data-proto-id="footer"]',
+        url: "/page2.html",
+      }),
+    });
+    const d2 = await r2.json() as { success: boolean; task: { url?: string } };
+    expect(d2.success).toBe(true);
+    expect(d2.task.url).toBe("/page2.html");
+
+    // Create global task (no url)
+    const r3 = await fetch("http://localhost:9728/api/tasks", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title: "Global task",
+        description: "",
+        selector: '[data-proto-id="header"]',
+      }),
+    });
+    const d3 = await r3.json() as { success: boolean; task: { url?: string } };
+    expect(d3.success).toBe(true);
+    expect(d3.task.url).toBeUndefined();
+
+    // API returns ALL three tasks (no server-side URL filtering)
+    const listRes = await fetch("http://localhost:9728/api/tasks");
+    const listData = await listRes.json() as { tasks: Array<{ url?: string; title: string }> };
+    expect(listData.tasks).toHaveLength(3);
+
+    const urls = listData.tasks.map((t) => t.url);
+    expect(urls).toContain("/page1.html");
+    expect(urls).toContain("/page2.html");
+    expect(urls).toContain(undefined);
+  });
+
+  it("injected overlay script includes client-side url filtering for sidebar", async () => {
+    writeFileSync(join(tempDir, "index.html"), SAMPLE_HTML, "utf-8");
+
+    instance = await serve(tempDir, { port: 9729, open: false });
+
+    const res = await fetch("http://localhost:9729/index.html");
+    const html = await res.text();
+
+    const match = html.match(/<script data-proto-overlay[^>]*>([\s\S]*?)<\/script>/);
+    expect(match).not.toBeNull();
+
+    const inlineScript = match![1];
+    // Must contain the client-side URL filter logic
+    expect(inlineScript).toContain("pageTasks");
+    expect(inlineScript).toContain("location.pathname");
+    expect(inlineScript).toContain("other-pages-hint");
+  });
+});

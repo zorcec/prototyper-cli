@@ -226,10 +226,10 @@ export const OVERLAY_CSS = `
     border-radius: 8px;
     background: #1e293b;
     cursor: pointer;
-    transition: border-color 0.15s;
+    transition: border-color 0.15s, background 0.15s;
   }
 
-  .task-card:hover { border-color: #334155; }
+  .task-card:hover { border-color: #334155; background: #243044; }
 
   .task-card-header {
     display: flex;
@@ -449,22 +449,6 @@ export const OVERLAY_CSS = `
   }
 
   .legend-toggle:hover { background: #1e293b; color: #cbd5e1; }
-
-  /* ── Remove screenshot button ────────────────────────────────────── */
-  .remove-screenshot-btn {
-    display: block;
-    margin-top: 6px;
-    padding: 3px 10px;
-    border-radius: 4px;
-    font-size: 11px;
-    color: #f87171;
-    border: 1px solid #f87171;
-    background: rgba(248, 113, 113, 0.1);
-    cursor: pointer;
-    pointer-events: auto;
-  }
-
-  .remove-screenshot-btn:hover { background: rgba(248, 113, 113, 0.2); }
 
   /* ── Page / variant switcher ────────────────────────────────────── */
   .proto-page-switcher {
@@ -694,13 +678,135 @@ export const OVERLAY_CSS = `
   .modal-footer {
     display: flex;
     align-items: center;
+    justify-content: space-between;
     gap: 8px;
     padding: 10px 16px 14px;
     border-top: 1px solid #334155;
     flex-shrink: 0;
   }
-`;
 
+  .modal-footer-left  { display: flex; gap: 8px; align-items: center; }
+  .modal-footer-right { display: flex; gap: 8px; align-items: center; }
+
+  /* Modal footer buttons */
+  .modal-footer button {
+    padding: 7px 18px;
+    border-radius: 7px;
+    font-size: 13px;
+    font-family: system-ui, sans-serif;
+    font-weight: 500;
+    cursor: pointer;
+    border: 1px solid #334155;
+    background: #1e293b;
+    color: #cbd5e1;
+    transition: background 0.12s, border-color 0.12s;
+  }
+
+  .modal-footer button:hover { background: #334155; }
+
+  .modal-footer button.btn-primary {
+    background: #2563eb;
+    color: #fff;
+    border-color: #1d4ed8;
+    padding: 7px 24px;
+  }
+  .modal-footer button.btn-primary:hover { background: #1d4ed8; }
+
+  .modal-footer button.btn-ghost {
+    background: transparent;
+    border-color: transparent;
+    color: #64748b;
+  }
+  .modal-footer button.btn-ghost:hover { background: #1e293b; color: #94a3b8; border-color: #334155; }
+
+  .modal-footer button.btn-screenshot {
+    font-size: 12px;
+    padding: 6px 14px;
+    background: transparent;
+    border: 1px dashed #334155;
+    color: #64748b;
+  }
+  .modal-footer button.btn-screenshot:hover { border-color: #475569; color: #94a3b8; background: #1e293b; }
+
+  /* ── Screenshot section in edit modal ────────────────────────────────── */
+  .modal-screenshot-section {
+    padding: 0 16px 10px;
+    flex-shrink: 0;
+  }
+
+  .screenshot-container {
+    position: relative;
+    display: inline-flex;
+    border-radius: 8px;
+    overflow: hidden;
+    border: 1px solid #334155;
+    background: #0f172a;
+    max-width: 100%;
+  }
+
+  .screenshot-container img {
+    display: block;
+    max-width: 100%;
+    max-height: 140px;
+    object-fit: contain;
+  }
+
+  .screenshot-remove-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.55);
+    opacity: 0;
+    transition: opacity 0.15s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+  }
+
+  .screenshot-container:hover .screenshot-remove-overlay { opacity: 1; pointer-events: auto; }
+
+  .screenshot-remove-overlay button {
+    background: rgba(239, 68, 68, 0.9);
+    border: none;
+    color: #fff;
+    padding: 5px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+  }
+
+  .screenshot-remove-overlay button:hover { background: #ef4444; }
+
+  /* ── Screenshot thumbnail in sidebar task cards ───────────────────────── */
+  .task-screenshot-thumb {
+    margin-top: 6px;
+    border-radius: 5px;
+    overflow: hidden;
+    border: 1px solid #1e293b;
+    position: relative;
+  }
+
+  .task-screenshot-thumb img {
+    display: block;
+    width: 100%;
+    max-height: 72px;
+    object-fit: cover;
+    object-position: top;
+  }
+
+  .task-screenshot-thumb:hover .screenshot-remove-overlay { opacity: 1; pointer-events: auto; }
+
+  /* ── Other-pages hint in sidebar ─────────────────────────────────────── */
+  .other-pages-hint {
+    text-align: center;
+    font-size: 11px;
+    color: #475569;
+    padding: 8px 0 4px;
+    border-top: 1px solid #1e293b;
+    margin-top: 8px;
+  }
+`;
 
 // Host-page CSS for hover outline in annotation mode.
 // .proto-hover-highlight is toggled by JS on the directly-hovered element
