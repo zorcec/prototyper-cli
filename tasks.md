@@ -18,6 +18,9 @@ Mark implemented tasks as you proceed. Make sure to update the TESTING.md docume
 [] create a prompt template that will get added to the project with purpose of implementing the tasks that are not done yet.
 [] add a feature "archive" and "archive" all for tasks. Once Archived, all tasks are collected into one .md file, and individual files are removed out. Add information  inside when were archived, and the reason provided by the user.
 [] screenshots are sometimes off, rework the logic to use the chrome extension API to get the screenshot, instead of the current logic that is based on the injected code.
+[] read the whole codebase, challange what can be simplified or improved in the implementation, and implement those improvements. (for example, we have some duplicated code in the server and extension for the screenshot, we can unify that, etc.).
+[] brainstorm about edge cases and what can be additional e2e tested, then implement those tests.
+[] improve unit tests coverage; >85% per files
 
 [] check an implement all tasks that are left in "/home/zorcec/workspace/home-finder/docs/real-estate-reference/prototype/.proto/tasks.md"
   - before implementation read: /home/zorcec/workspace/home-finder/docs/real-estate-reference/prototype/prototype-rules.md
