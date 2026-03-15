@@ -50,11 +50,12 @@ function registerTaskApi(
   });
 
   app.post("/api/tasks", (req, res) => {
-    const { title, description, selector, url, screenshot } =
+    const { title, description, selector, cssSelector, url, screenshot } =
       req.body as {
         title?: string;
         description?: string;
         selector?: string;
+        cssSelector?: string;
         url?: string;
         screenshot?: string;
       };
@@ -68,6 +69,7 @@ function registerTaskApi(
       title,
       description: description || "",
       selector,
+      cssSelector: cssSelector || undefined,
       url: url || undefined,
       status: "todo",
       screenshot: undefined,
@@ -79,6 +81,7 @@ function registerTaskApi(
       task.screenshot = filename;
     }
 
+    console.log(`[Proto] Task created: "${task.title}" (${task.id})`);
     broadcast({ type: "tasks-updated" });
     res.json({ success: true, task });
   });
@@ -95,6 +98,7 @@ function registerTaskApi(
       return;
     }
 
+    console.log(`[Proto] Task updated: "${updated.title}" (${updated.id}) → status:${updated.status}`);
     broadcast({ type: "tasks-updated" });
     res.json({ success: true, task: updated });
   });
@@ -107,6 +111,7 @@ function registerTaskApi(
       return;
     }
 
+    console.log(`[Proto] Task deleted: ${id}`);
     broadcast({ type: "tasks-updated" });
     res.json({ success: true });
   });
@@ -207,7 +212,7 @@ async function serveApiOnly(
   return new Promise<ServeInstance>((resolvePromise, reject) => {
     httpServer.listen(options.port, () => {
       const url = `http://localhost:${options.port}`;
-      console.log(chalk.green(`✓ Prototype Studio API running at ${url}`));
+      console.log(chalk.green(`✓ Proto Studio API running at ${url}`));
       console.log(chalk.cyan("  Mode: API-only (use Chrome extension or add the overlay script manually)"));
       console.log(chalk.dim("  Task API:      " + url + "/api/tasks"));
       console.log(chalk.dim("  Overlay script: " + url + "/proto-overlay.js"));
@@ -382,7 +387,7 @@ async function serveProxy(
   return new Promise<ServeInstance>((resolvePromise, reject) => {
     httpServer.listen(options.port, () => {
       const url = `http://localhost:${options.port}`;
-      console.log(chalk.green(`✓ Prototype Studio proxy running at ${url}`));
+      console.log(chalk.green(`✓ Proto Studio proxy running at ${url}`));
       console.log(chalk.cyan(`  Proxying: ${upstreamUrl}  (overlay injected into all HTML pages)`));
       console.log(chalk.dim("  Task API:       " + url + "/api/tasks"));
       console.log(chalk.dim("  Overlay script: " + url + "/proto-overlay.js"));
@@ -487,11 +492,11 @@ export async function serve(
           return `<li><a href="/${name}">${name}</a></li>`;
         })
         .join("\n");
-      res.send(`<!DOCTYPE html><html><head><title>Prototype Studio</title>
+      res.send(`<!DOCTYPE html><html><head><title>Proto Studio</title>
 <style>body{font-family:system-ui;max-width:600px;margin:40px auto;padding:0 20px}
 a{color:#2563eb;text-decoration:none}a:hover{text-decoration:underline}
 li{margin:8px 0}</style></head>
-<body><h1>Prototype Studio</h1>
+<body><h1>Proto Studio</h1>
 <p>Select a prototype to review:</p>
 <ul>${links}</ul></body></html>`);
     });
@@ -562,7 +567,7 @@ li{margin:8px 0}</style></head>
   return new Promise<ServeInstance>((resolvePromise, reject) => {
     httpServer.listen(options.port, () => {
       const url = `http://localhost:${options.port}`;
-      console.log(chalk.green(`✓ Prototype Studio running at ${url}`));
+      console.log(chalk.green(`✓ Proto Studio running at ${url}`));
       for (const f of htmlFiles) {
         const route = isDir ? `/${basename(f)}` : "/";
         console.log(chalk.dim(`  ${basename(f)} → ${url}${route}`));

@@ -398,7 +398,7 @@ export function initProject(targetDir: string): { files: string[] } {
     created.push(indexPath);
   }
 
-  console.log(chalk.green("✓ Prototype Studio initialized"));
+  console.log(chalk.green("✓ Proto Studio initialized"));
   for (const f of created) {
     console.log(chalk.dim(`  created: ${f}`));
   }

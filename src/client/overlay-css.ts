@@ -265,6 +265,17 @@ export const OVERLAY_CSS = `
     font-family: 'SF Mono', 'Fira Code', monospace;
   }
 
+  .task-url-badge {
+    font-size: 10px;
+    color: #64748b;
+    background: #1e293b;
+    border: 1px solid #334155;
+    border-radius: 3px;
+    padding: 1px 5px;
+    margin-left: auto;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+  }
+
   .task-description {
     margin: 6px 0 0;
     font-size: 12px;

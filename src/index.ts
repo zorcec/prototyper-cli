@@ -4,7 +4,7 @@ import { attachProject } from "./commands/attach.js";
 import { serve } from "./server/server.js";
 import { exportFile, exportDirectory, exportTasks, isDirectory as isDir } from "./commands/export.js";
 import { validateFile, validateDirectory, isDirectory as isDir2 } from "./commands/validate.js";
-import { listTasks, updateTask } from "./core/tasks.js";
+import { listTasks, listTasksWithPaths, updateTask } from "./core/tasks.js";
 import type { Task, TaskStatus } from "./core/types.js";
 import { writeFileSync } from "node:fs";
 import chalk from "chalk";
@@ -14,7 +14,7 @@ const program = new Command();
 program
   .name("proto")
   .description(
-    "Prototype Studio — CLI tool for frontend prototyping with LLM assistance",
+    "Proto Studio — CLI tool for frontend prototyping with LLM assistance",
   )
   .version("1.0.0");
 
@@ -138,7 +138,8 @@ program
       const hasEdits = opts.title || opts.setStatus || opts.description;
 
       if (!taskId || !hasEdits) {
-        const all = listTasks(dir);
+        let all = listTasks(dir);
+        if (opts.status) all = all.filter((t) => t.status === opts.status);
         console.log(chalk.bold("proto tasks --edit — LLM Usage Instructions"));
         console.log();
         console.log("Edit a task:");
@@ -182,7 +183,7 @@ program
     }
 
     // ── List mode ──────────────────────────────────────────────────────
-    let filtered = listTasks(dir);
+    let filtered = listTasksWithPaths(dir);
 
     if (opts.status) filtered = filtered.filter((t) => t.status === opts.status);
 
@@ -201,7 +202,9 @@ program
       const colorFn = statusColors[task.status] || chalk.white;
       console.log(`  ${colorFn(`[${task.status}]`)} ${task.title}`);
       console.log(chalk.dim(`    id:       ${task.id}`));
+      console.log(chalk.dim(`    file:     ${task.filePath}`));
       console.log(chalk.dim(`    selector: ${task.selector}`));
+      if (task.cssSelector) console.log(chalk.dim(`    css:      ${task.cssSelector}`));
       if (task.url) console.log(chalk.dim(`    url:      ${task.url}`));
       if (task.screenshot) console.log(chalk.dim(`    screenshot: ${task.screenshot}`));
       console.log(chalk.dim(`    created:  ${task.created}`));

@@ -330,4 +330,87 @@ describe("getOverlayScript", () => {
     const afterClick = script.slice(clickIdx, clickIdx + 500);
     expect(afterClick).toContain("tooltipPinned = true");
   });
+
+  // ── Regression: tasks.md fixes ────────────────────────────────────────────
+
+  it("screenshot URLs use absolute SCREENSHOTS_URL (not relative /screenshots/)", () => {
+    const script = getOverlayScript(3700);
+    // Must define SCREENSHOTS_URL
+    expect(script).toContain("var SCREENSHOTS_URL = 'http://localhost:3700/screenshots/'");
+    // All screenshot img src must use SCREENSHOTS_URL variable, not relative path
+    expect(script).not.toContain("'/screenshots/' + task.screenshot");
+    expect(script).not.toContain("\"/screenshots/\" + task.screenshot");
+  });
+
+  it("screenshot URL uses the correct port from getOverlayScript argument", () => {
+    const script = getOverlayScript(4567);
+    expect(script).toContain("var SCREENSHOTS_URL = 'http://localhost:4567/screenshots/'");
+  });
+
+  it("buildCssPath function is defined for CSS selector storage", () => {
+    const script = getOverlayScript(3700);
+    expect(script).toContain("function buildCssPath");
+    // Used in showPopover to compute cssSelector
+    expect(script).toContain("var cssSelector = buildCssPath(element)");
+  });
+
+  it("submitTask includes cssSelector in POST body", () => {
+    const script = getOverlayScript(3700);
+    // submitTask must pass cssSelector to POST body
+    expect(script).toContain("cssSelector: cssSelector");
+    // Function must accept cssSelector as second param
+    expect(script).toContain("function submitTask(selector, cssSelector,");
+  });
+
+  it("click-to-annotate uses e.target directly (not .closest ancestors)", () => {
+    const script = getOverlayScript(3700);
+    // The click handler should use var target = e.target; NOT traverse to find data-testid
+    const clickAnnotateIdx = script.indexOf("Click-to-annotate");
+    expect(clickAnnotateIdx).toBeGreaterThan(-1);
+    const clickSection = script.slice(clickAnnotateIdx, clickAnnotateIdx + 300);
+    // Must have 'var target = e.target;'
+    expect(clickSection).toContain("var target = e.target;");
+    // Must NOT traverse ancestry for data-testid in the click handler
+    expect(clickSection).not.toContain("e.target.closest('[data-testid]')");
+  });
+
+  it("contextmenu handler uses e.target directly (not .closest ancestors)", () => {
+    const script = getOverlayScript(3700);
+    const ctxIdx = script.indexOf("Right-click context menu");
+    expect(ctxIdx).toBeGreaterThan(-1);
+    const ctxSection = script.slice(ctxIdx, ctxIdx + 300);
+    expect(ctxSection).toContain("var target = e.target;");
+    expect(ctxSection).not.toContain("e.target.closest('[data-testid]')");
+  });
+
+  it("sidebar shows ALL tasks — otherPageTasks merged into allSidebarTasks", () => {
+    const script = getOverlayScript(3700);
+    expect(script).toContain("otherPageTasks");
+    expect(script).toContain("allSidebarTasks");
+    // All sidebar tasks = page tasks + other page tasks
+    expect(script).toContain("pageTasks.concat(otherPageTasks)");
+  });
+
+  it("sidebar shows URL badge for tasks from other pages", () => {
+    const script = getOverlayScript(3700);
+    expect(script).toContain("task-url-badge");
+    expect(script).toContain("task.url !== currentPath");
+  });
+
+  it("SPA navigation detection monkey-patches pushState and replaceState", () => {
+    const script = getOverlayScript(3700);
+    expect(script).toContain("onRouteChange");
+    expect(script).toContain("history.pushState");
+    expect(script).toContain("history.replaceState");
+    expect(script).toContain("_protoOrigPush");
+    expect(script).toContain("_protoOrigReplace");
+    // Must also listen for popstate
+    expect(script).toContain("popstate");
+  });
+
+  it("console.log messages exist in overlay for debugging", () => {
+    const script = getOverlayScript(3700);
+    // Existing error logs should still be present
+    expect(script).toContain("console.error('[Proto Studio]'");
+  });
 });

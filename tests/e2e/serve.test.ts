@@ -882,3 +882,116 @@ describe("proto serve — task url field and overlay url-filtering", () => {
     expect(inlineScript).toContain("other-pages-hint");
   });
 });
+
+// ── Regression: tasks.md bug-fixes ─────────────────────────────────────────
+describe("proto serve — regression: tasks.md fixes", () => {
+  let tempDir: string;
+  let instance: ServeInstance | null = null;
+
+  beforeEach(() => {
+    tempDir = mkdtempSync(join(tmpdir(), "proto-e2e-regression-"));
+  });
+
+  afterEach(async () => {
+    if (instance) {
+      await instance.close();
+      instance = null;
+    }
+    rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  it("POST /api/tasks stores cssSelector when provided", async () => {
+    const filePath = join(tempDir, "index.html");
+    writeFileSync(filePath, "<html><body><h1>Test</h1></body></html>", "utf-8");
+
+    instance = await serve(filePath, { port: 9730, open: false });
+
+    const res = await fetch("http://localhost:9730/api/tasks", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title: "CSS selector task",
+        selector: '[data-testid="hero"]',
+        cssSelector: "main > section > h1",
+      }),
+    });
+    const data = await res.json();
+    expect(data.success).toBe(true);
+    expect(data.task.id).toBeDefined();
+
+    // Verify cssSelector is stored and returned
+    const listRes = await fetch("http://localhost:9730/api/tasks");
+    const listData = await listRes.json();
+    expect(listData.tasks[0].cssSelector).toBe("main > section > h1");
+  });
+
+  it("POST /api/tasks works without cssSelector (backwards-compatible)", async () => {
+    const filePath = join(tempDir, "index.html");
+    writeFileSync(filePath, "<html><body><h1>Test</h1></body></html>", "utf-8");
+
+    instance = await serve(filePath, { port: 9731, open: false });
+
+    const res = await fetch("http://localhost:9731/api/tasks", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title: "No CSS selector",
+        selector: '[data-proto-id="btn"]',
+      }),
+    });
+    const data = await res.json();
+    expect(data.success).toBe(true);
+
+    const listRes = await fetch("http://localhost:9731/api/tasks");
+    const listData = await listRes.json();
+    expect(listData.tasks[0].cssSelector).toBeUndefined();
+  });
+
+  it("screenshots are served at absolute path (SCREENSHOTS_URL in overlay)", async () => {
+    const filePath = join(tempDir, "index.html");
+    writeFileSync(filePath, "<html><body><h1>Test</h1></body></html>", "utf-8");
+
+    instance = await serve(filePath, { port: 9732, open: false });
+
+    const res = await fetch("http://localhost:9732/");
+    const html = await res.text();
+    const match = html.match(/<script data-proto-overlay[^>]*>([\s\S]*?)<\/script>/);
+    expect(match).not.toBeNull();
+
+    const overlayScript = match![1];
+    // Overlay must use absolute SCREENSHOTS_URL variable
+    expect(overlayScript).toContain("SCREENSHOTS_URL");
+    expect(overlayScript).toContain("http://localhost:9732/screenshots/");
+    // Must NOT use relative path
+    expect(overlayScript).not.toContain("'/screenshots/' + task.screenshot");
+  });
+
+  it("sidebar shows allSidebarTasks (all pages) in overlay script", async () => {
+    const filePath = join(tempDir, "index.html");
+    writeFileSync(filePath, "<html><body><h1>Test</h1></body></html>", "utf-8");
+
+    instance = await serve(filePath, { port: 9733, open: false });
+
+    const res = await fetch("http://localhost:9733/");
+    const html = await res.text();
+    const match = html.match(/<script data-proto-overlay[^>]*>([\s\S]*?)<\/script>/);
+    const overlayScript = match![1];
+    // Sidebar should use all-tasks merge
+    expect(overlayScript).toContain("allSidebarTasks");
+    expect(overlayScript).toContain("otherPageTasks");
+  });
+
+  it("SPA navigation detection code is present in overlay", async () => {
+    const filePath = join(tempDir, "index.html");
+    writeFileSync(filePath, "<html><body><h1>Test</h1></body></html>", "utf-8");
+
+    instance = await serve(filePath, { port: 9734, open: false });
+
+    const res = await fetch("http://localhost:9734/");
+    const html = await res.text();
+    const match = html.match(/<script data-proto-overlay[^>]*>([\s\S]*?)<\/script>/);
+    const overlayScript = match![1];
+    expect(overlayScript).toContain("onRouteChange");
+    expect(overlayScript).toContain("history.pushState");
+  });
+});

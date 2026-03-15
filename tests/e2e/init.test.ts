@@ -30,7 +30,7 @@ describe("proto init (e2e)", () => {
 
   it("creates rules file in target directory", () => {
     const output = run(`init ${tempDir}`);
-    expect(output).toContain("Prototype Studio initialized");
+    expect(output).toContain("Proto Studio initialized");
     expect(existsSync(join(tempDir, "prototype-rules.md"))).toBe(true);
   });
 
@@ -140,7 +140,7 @@ describe("proto init (e2e)", () => {
 
   it("output shows success and ready message", () => {
     const output = run(`init ${tempDir}`);
-    expect(output).toContain("Prototype Studio initialized");
+    expect(output).toContain("Proto Studio initialized");
     expect(output).toContain("Ready! Start prototyping");
   });
 
@@ -296,6 +296,87 @@ describe("proto tasks (e2e)", () => {
       threw = true;
     }
     expect(threw).toBe(true);
+  });
+
+  // ── Regression: tasks.md fixes ───────────────────────────────────────────
+
+  it("tasks list output includes file path for each task", () => {
+    const { mkdirSync, writeFileSync } = require("node:fs");
+    const tasksDir = join(tempDir, ".proto", "tasks");
+    mkdirSync(tasksDir, { recursive: true });
+    writeFileSync(join(tasksDir, "path-test.md"), [
+      "---",
+      "id: pathtest1",
+      "status: todo",
+      'selector: "#btn"',
+      "created: 2025-01-01T00:00:00.000Z",
+      "---",
+      "",
+      "# Task with path",
+    ].join("\n"), "utf-8");
+
+    const output = run(`tasks ${tempDir}`);
+    // File path should be shown in output
+    expect(output).toContain("file:");
+    expect(output).toContain(".proto/tasks");
+    expect(output).toContain("path-test.md");
+  });
+
+  it("--edit respects --status filter when listing available tasks", () => {
+    const { mkdirSync, writeFileSync } = require("node:fs");
+    const tasksDir = join(tempDir, ".proto", "tasks");
+    mkdirSync(tasksDir, { recursive: true });
+    writeFileSync(join(tasksDir, "todo-task.md"), [
+      "---",
+      "id: todotask1",
+      "status: todo",
+      'selector: "#a"',
+      "created: 2025-01-01T00:00:00.000Z",
+      "---",
+      "",
+      "# Todo Task",
+    ].join("\n"), "utf-8");
+    writeFileSync(join(tasksDir, "done-task.md"), [
+      "---",
+      "id: donetask1",
+      "status: done",
+      'selector: "#b"',
+      "created: 2025-01-01T00:00:00.000Z",
+      "---",
+      "",
+      "# Done Task",
+    ].join("\n"), "utf-8");
+
+    // Without filter: lists both tasks in usage instructions
+    const outputAll = run(`tasks ${tempDir} --edit`);
+    expect(outputAll).toContain("Todo Task");
+    expect(outputAll).toContain("Done Task");
+
+    // With --status todo: only shows todo tasks in the edit usage list
+    const outputTodo = run(`tasks ${tempDir} --edit --status todo`);
+    expect(outputTodo).toContain("Todo Task");
+    expect(outputTodo).not.toContain("Done Task");
+  });
+
+  it("tasks list shows cssSelector when present", () => {
+    const { mkdirSync, writeFileSync } = require("node:fs");
+    const tasksDir = join(tempDir, ".proto", "tasks");
+    mkdirSync(tasksDir, { recursive: true });
+    writeFileSync(join(tasksDir, "css-task.md"), [
+      "---",
+      "id: csstask1",
+      "status: todo",
+      'selector: "[data-testid=\\"hero\\"]"',
+      'cssSelector: "main > section > h1"',
+      "created: 2025-01-01T00:00:00.000Z",
+      "---",
+      "",
+      "# CSS Selector Task",
+    ].join("\n"), "utf-8");
+
+    const output = run(`tasks ${tempDir}`);
+    expect(output).toContain("css:");
+    expect(output).toContain("main > section > h1");
   });
 });
 

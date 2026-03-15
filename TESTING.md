@@ -1,4 +1,4 @@
-# Prototype Studio — Testing Guide
+# Proto Studio — Testing Guide
 
 ## Running tests
 
@@ -51,6 +51,19 @@ npx vitest run --config vitest.pw.config.ts
 | Page / variant switcher (`GET /api/pages` + `renderPageSwitcher`) | ✅ `tests/unit/overlay.test.ts` | ✅ `tests/e2e/serve.test.ts` |
 | `proto tasks` — show full YAML front matter | — | ✅ `tests/e2e/serve.test.ts` |
 | `proto tasks --edit` — LLM-friendly task editing | — | ✅ `tests/e2e/init.test.ts` |
+| `proto tasks` — output includes full file path (regression) | — | ✅ `tests/e2e/init.test.ts` |
+| `proto tasks --edit --status` — filter available tasks in edit mode (regression) | — | ✅ `tests/e2e/init.test.ts` |
+| `cssSelector` field in task front matter (stores CSS path alongside selector) | ✅ `tests/unit/tasks.test.ts` | ✅ `tests/e2e/init.test.ts`, `tests/e2e/serve.test.ts` |
+| `listTasksWithPaths` — returns tasks with file paths | ✅ `tests/unit/tasks.test.ts` | — |
+| Console logs on task create/update/delete via API | — | ✅ `tests/e2e/serve.test.ts` |
+| Screenshot URLs use absolute `SCREENSHOTS_URL` (fixes cross-origin display) | ✅ `tests/unit/overlay.test.ts` | ✅ `tests/e2e/serve.test.ts` |
+| `buildCssPath` — always computes CSS path independent of test-id | ✅ `tests/unit/overlay.test.ts` | — |
+| Click/contextmenu use `e.target` directly (fixes all tasks same selector bug) | ✅ `tests/unit/overlay.test.ts` | — |
+| Sidebar shows ALL tasks across all pages (not just current page) | ✅ `tests/unit/overlay.test.ts` | ✅ `tests/e2e/serve.test.ts` |
+| Sidebar shows URL badge for tasks from other pages | ✅ `tests/unit/overlay.test.ts` | — |
+| SPA navigation detection (pushState/replaceState monkey-patch + popstate) | ✅ `tests/unit/overlay.test.ts` | ✅ `tests/e2e/serve.test.ts` |
+| Chrome extension `captureVisibleTab` — proper promise API without null windowId | — | — |
+| Package renamed from `prototype-studio` to `proto-studio` | — | — |
 | Full-screen task edit modal (2-tab: Edit + Preview) | ✅ `tests/unit/overlay.test.ts` | — |
 | Markdown renderer (`renderMarkdown`) | ✅ `tests/unit/overlay.test.ts` | — |
 | Overlay indicators hidden for off-screen elements (viewport check) | ✅ `tests/unit/overlay.test.ts` | — |

@@ -79,6 +79,7 @@ export function serializeTask(task: Task): string {
 
   if (task.url) lines.push(`url: "${task.url}"`);
   lines.push(`selector: "${task.selector}"`);
+  if (task.cssSelector) lines.push(`cssSelector: "${task.cssSelector}"`);
   if (task.screenshot) lines.push(`screenshot: ${task.screenshot}`);
   lines.push(`created: ${task.created}`);
   if (task.updated) lines.push(`updated: ${task.updated}`);
@@ -115,6 +116,7 @@ export function parseTask(content: string): Task | null {
       : "todo") as TaskStatus,
     url: frontMatter.url || undefined,
     selector: frontMatter.selector,
+    cssSelector: frontMatter.cssSelector || undefined,
     screenshot: frontMatter.screenshot || undefined,
     created: frontMatter.created || new Date().toISOString(),
     updated: frontMatter.updated || undefined,
@@ -170,6 +172,23 @@ export function listTasks(projectDir: string): Task[] {
     .sort()
     .map((f) => readTaskFile(join(tasksDir, f)))
     .filter((t): t is Task => t !== null);
+}
+
+export function listTasksWithPaths(
+  projectDir: string,
+): Array<Task & { filePath: string }> {
+  const tasksDir = getTasksDir(projectDir);
+  if (!existsSync(tasksDir)) return [];
+
+  return readdirSync(tasksDir)
+    .filter((f) => extname(f) === ".md")
+    .sort()
+    .map((f) => {
+      const filePath = join(tasksDir, f);
+      const task = readTaskFile(filePath);
+      return task ? { ...task, filePath } : null;
+    })
+    .filter((t): t is Task & { filePath: string } => t !== null);
 }
 
 export function findTaskFilePath(

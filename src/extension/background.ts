@@ -79,9 +79,12 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   }
 
   if (msg.type === "capture-screenshot") {
-    chrome.tabs.captureVisibleTab(null as unknown as number, { format: "png" }, (dataUrl) => {
-      sendResponse({ dataUrl });
-    });
+    chrome.tabs.captureVisibleTab({ format: "png" })
+      .then((dataUrl) => sendResponse({ dataUrl }))
+      .catch((err: Error) => {
+        console.error("[Proto Studio] Screenshot capture failed:", err.message);
+        sendResponse({ dataUrl: null });
+      });
     return true; // async response
   }
 });

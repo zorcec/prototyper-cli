@@ -14,6 +14,7 @@ import {
   createTask,
   readTaskFile,
   listTasks,
+  listTasksWithPaths,
   findTaskFilePath,
   updateTask,
   deleteTask,
@@ -359,5 +360,144 @@ describe("deleteScreenshot", () => {
     const updated = deleteScreenshot(tempDir, task.id);
     expect(updated).not.toBeNull();
     expect(updated!.screenshot).toBeUndefined();
+  });
+});
+
+// ── Regression: cssSelector support ────────────────────────────────────────
+describe("cssSelector in Task", () => {
+  let tempDir: string;
+
+  beforeEach(() => {
+    tempDir = mkdtempSync(join(tmpdir(), "proto-css-sel-"));
+  });
+
+  afterEach(() => {
+    rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  it("serializeTask includes cssSelector in front matter when set", () => {
+    const task: Task = {
+      id: "abc12345",
+      title: "Test",
+      description: "",
+      status: "todo",
+      selector: '[data-testid="btn"]',
+      cssSelector: "main > section > button.primary",
+      created: "2025-01-01T00:00:00.000Z",
+    };
+    const md = serializeTask(task);
+    expect(md).toContain('cssSelector: "main > section > button.primary"');
+  });
+
+  it("serializeTask omits cssSelector when not set", () => {
+    const task: Task = {
+      id: "abc12345",
+      title: "Test",
+      description: "",
+      status: "todo",
+      selector: '[data-testid="btn"]',
+      created: "2025-01-01T00:00:00.000Z",
+    };
+    const md = serializeTask(task);
+    expect(md).not.toContain("cssSelector");
+  });
+
+  it("parseTask reads cssSelector from front matter", () => {
+    const md = `---
+id: abc12345
+status: todo
+selector: "[data-testid=\\"btn\\"]"
+cssSelector: "main > section > button"
+created: 2025-01-01T00:00:00.000Z
+---
+
+# Test task
+`;
+    const task = parseTask(md);
+    expect(task).not.toBeNull();
+    expect(task!.cssSelector).toBe("main > section > button");
+  });
+
+  it("parseTask sets cssSelector to undefined when absent", () => {
+    const md = `---
+id: abc12345
+status: todo
+selector: "[data-testid=\\"btn\\"]"
+created: 2025-01-01T00:00:00.000Z
+---
+
+# Test task
+`;
+    const task = parseTask(md);
+    expect(task!.cssSelector).toBeUndefined();
+  });
+
+  it("createTask stores cssSelector in file and roundtrips correctly", () => {
+    const task = createTask(tempDir, {
+      title: "With CSS selector",
+      description: "",
+      status: "todo",
+      selector: '[data-testid="hero"]',
+      cssSelector: "div.hero > h1",
+    });
+    expect(task.cssSelector).toBe("div.hero > h1");
+
+    const tasks = listTasks(tempDir);
+    expect(tasks[0].cssSelector).toBe("div.hero > h1");
+  });
+});
+
+// ── Regression: listTasksWithPaths ────────────────────────────────────────
+describe("listTasksWithPaths", () => {
+  let tempDir: string;
+
+  beforeEach(() => {
+    tempDir = mkdtempSync(join(tmpdir(), "proto-paths-"));
+  });
+
+  afterEach(() => {
+    rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  it("returns empty array for non-existent dir", () => {
+    expect(listTasksWithPaths(tempDir)).toEqual([]);
+  });
+
+  it("returns tasks with filePath property", () => {
+    createTask(tempDir, {
+      title: "Task A",
+      description: "",
+      status: "todo",
+      selector: '[data-proto-id="a"]',
+    });
+    createTask(tempDir, {
+      title: "Task B",
+      description: "",
+      status: "done",
+      selector: '[data-proto-id="b"]',
+    });
+
+    const results = listTasksWithPaths(tempDir);
+    expect(results).toHaveLength(2);
+    for (const result of results) {
+      expect(result.filePath).toBeDefined();
+      expect(result.filePath.endsWith(".md")).toBe(true);
+      expect(existsSync(result.filePath)).toBe(true);
+    }
+  });
+
+  it("filePath matches the actual task file", () => {
+    const task = createTask(tempDir, {
+      title: "Path check",
+      description: "",
+      status: "todo",
+      selector: '[data-proto-id="pathcheck"]',
+    });
+
+    const results = listTasksWithPaths(tempDir);
+    expect(results).toHaveLength(1);
+    const content = readFileSync(results[0].filePath, "utf-8");
+    expect(content).toContain(task.id);
+    expect(content).toContain("Path check");
   });
 });

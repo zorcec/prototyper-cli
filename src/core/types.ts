@@ -20,6 +20,7 @@ export interface Task {
   status: TaskStatus;
   url?: string;
   selector: string;
+  cssSelector?: string;
   screenshot?: string;
   created: string;
   updated?: string;

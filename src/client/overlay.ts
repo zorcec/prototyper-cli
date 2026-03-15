@@ -14,6 +14,7 @@ export function getOverlayScript(port: number): string {
   var WS_URL     = 'ws://localhost:${port}';
   var API_URL    = 'http://localhost:${port}/api/tasks';
   var PAGES_URL  = 'http://localhost:${port}/api/pages';
+  var SCREENSHOTS_URL = 'http://localhost:${port}/screenshots/';
 
   // ── Shadow DOM host ───────────────────────────────────────────────────
   var host = document.createElement('div');
@@ -164,6 +165,36 @@ export function getOverlayScript(port: number): string {
     }
     var sel = parts.join(' > ');
     return { selector: sel, display: sel };
+  }
+
+  // ── CSS path builder — always returns a CSS selector path (no test-id shortcut)
+  // Used to store cssSelector alongside the semantic selector in task front matter.
+  function buildCssPath(element) {
+    var parts = [];
+    var cur = element;
+    while (cur && cur !== document.body && parts.length < 4) {
+      if (cur !== element) {
+        var ancTestId = cur.getAttribute('data-testid');
+        if (ancTestId) { parts.unshift('[data-testid="' + ancTestId + '"]'); break; }
+        var ancId = cur.id;
+        if (ancId && /^[a-zA-Z_-]/.test(ancId)) { parts.unshift('#' + ancId); break; }
+      }
+      var tag = cur.tagName.toLowerCase();
+      var parent = cur.parentElement;
+      if (parent) {
+        var sameTags = [];
+        for (var ci = 0; ci < parent.children.length; ci++) {
+          if (parent.children[ci].tagName === cur.tagName) sameTags.push(parent.children[ci]);
+        }
+        if (sameTags.length > 1) tag += ':nth-of-type(' + (sameTags.indexOf(cur) + 1) + ')';
+      }
+      for (var cj = 0; cj < cur.classList.length; cj++) {
+        if (!cur.classList[cj].startsWith('proto-')) { tag += '.' + cur.classList[cj]; break; }
+      }
+      parts.unshift(tag);
+      cur = cur.parentElement;
+    }
+    return parts.join(' > ');
   }
 
   // ── Annotation-mode hover highlight ───────────────────────────────────
@@ -344,7 +375,7 @@ export function getOverlayScript(port: number): string {
 
       if (task.screenshot) {
         var thumbContainer = el('div', { className: 'task-screenshot-thumb' });
-        var thumbImg = el('img', { src: '/screenshots/' + task.screenshot });
+        var thumbImg = el('img', { src: SCREENSHOTS_URL + task.screenshot });
         thumbContainer.appendChild(thumbImg);
         card.appendChild(thumbContainer);
       }
@@ -573,7 +604,7 @@ export function getOverlayScript(port: number): string {
     }
 
     if (task.screenshot) {
-      screenshotSection.appendChild(buildScreenshotContainer('/screenshots/' + task.screenshot, false));
+      screenshotSection.appendChild(buildScreenshotContainer(SCREENSHOTS_URL + task.screenshot, false));
     }
 
     body.appendChild(screenshotSection);
@@ -655,6 +686,7 @@ export function getOverlayScript(port: number): string {
     if (popover) { popover.remove(); popover = null; }
     var info = buildElementSelector(element);
     var selector    = info.selector;
+    var cssSelector = buildCssPath(element);
     var displayName = info.display;
 
     var label    = el('div', { className: 'popover-label' }, 'Annotating: ', el('strong', null, displayName.slice(0, 60)));
@@ -694,7 +726,7 @@ export function getOverlayScript(port: number): string {
       var text = textarea.value.trim();
       var title = titleInput.value.trim() || text.slice(0, 80) || 'Untitled';
       if (!text && !title) return;
-      submitTask(selector, title, text || title, captureBase64);
+      submitTask(selector, cssSelector, title, text || title, captureBase64);
       captureBase64 = null;
       popover.remove(); popover = null;
     });
@@ -704,7 +736,7 @@ export function getOverlayScript(port: number): string {
     });
   }
 
-  function submitTask(selector, title, description, screenshotBase64) {
+  function submitTask(selector, cssSelector, title, description, screenshotBase64) {
     var url = location.pathname;
     fetch(API_URL, {
       method: 'POST',
@@ -713,6 +745,7 @@ export function getOverlayScript(port: number): string {
         title: title,
         description: description,
         selector: selector,
+        cssSelector: cssSelector || null,
         url: url,
         screenshot: screenshotBase64 || null,
       }),
@@ -891,13 +924,16 @@ export function getOverlayScript(port: number): string {
     var closeBtn = el('span', { className: 'sidebar-close' }, '\u2715');
     closeBtn.addEventListener('click', function () { sidebar.classList.remove('open'); sidebarPinned = false; });
 
-    // Task 1: filter tasks to current page URL (same rule as renderIndicators)
+    // Sidebar shows ALL tasks. Tasks matching current page come first; tasks from
+    // other pages are shown below with a URL label so nothing is ever hidden.
     var currentPath = location.pathname;
     var pageTasks = tasks.filter(function (t) { return !t.url || t.url === currentPath; });
-    var otherPagesCount = tasks.length - pageTasks.length;
+    var otherPageTasks = tasks.filter(function (t) { return t.url && t.url !== currentPath; });
+    var otherPagesCount = otherPageTasks.length;
+    var allSidebarTasks = pageTasks.concat(otherPageTasks);
 
-    var todoCount = pageTasks.filter(function (t) { return t.status !== 'done'; }).length;
-    sidebar.appendChild(el('h3', null, 'Tasks (' + todoCount + '/' + pageTasks.length + ')', closeBtn));
+    var todoCount = allSidebarTasks.filter(function (t) { return t.status !== 'done'; }).length;
+    sidebar.appendChild(el('h3', null, 'Tasks (' + todoCount + '/' + allSidebarTasks.length + ')', closeBtn));
 
     // Legend / filter toggles
     var legendSection = el('div', { className: 'sidebar-legend' });
@@ -922,11 +958,11 @@ export function getOverlayScript(port: number): string {
     legendSection.appendChild(doneToggleBtn);
     sidebar.appendChild(legendSection);
 
-    var visibleTasks = sidebarShowDone ? pageTasks : pageTasks.filter(function (t) { return t.status !== 'done'; });
+    var visibleTasks = sidebarShowDone ? allSidebarTasks : allSidebarTasks.filter(function (t) { return t.status !== 'done'; });
     if (visibleTasks.length === 0) {
-      sidebar.appendChild(el('p', { className: 'empty-msg' }, pageTasks.length === 0 ? 'No tasks yet. Right-click or Alt+A to annotate.' : 'All done! Toggle "Show Done" to see completed tasks.'));
+      sidebar.appendChild(el('p', { className: 'empty-msg' }, allSidebarTasks.length === 0 ? 'No tasks yet. Right-click or Alt+A to annotate.' : 'All done! Toggle "Show Done" to see completed tasks.'));
       if (otherPagesCount > 0) {
-        sidebar.appendChild(el('p', { className: 'other-pages-hint' }, otherPagesCount + ' task' + (otherPagesCount > 1 ? 's' : '') + ' on other pages'));
+        sidebar.appendChild(el('p', { className: 'other-pages-hint' }, 'Includes ' + otherPagesCount + ' task' + (otherPagesCount > 1 ? 's' : '') + ' from other pages'));
       }
       return;
     }
@@ -944,6 +980,11 @@ export function getOverlayScript(port: number): string {
       var statusBadge = el('span', { className: statusCls }, task.status);
 
       var header = el('div', { className: 'task-card-header' }, statusBadge);
+      // Show URL label for tasks from other pages so the user knows where they belong
+      if (task.url && task.url !== currentPath) {
+        var urlBadge = el('span', { className: 'task-url-badge' }, task.url);
+        header.appendChild(urlBadge);
+      }
       var titleEl = el('div', { className: 'task-title' }, task.title);
       var selectorEl = el('div', { className: 'task-selector' }, task.selector);
 
@@ -955,7 +996,7 @@ export function getOverlayScript(port: number): string {
 
       if (task.screenshot) {
         var thumbContainer = el('div', { className: 'task-screenshot-thumb' });
-        var thumbImg = el('img', { src: '/screenshots/' + task.screenshot });
+        var thumbImg = el('img', { src: SCREENSHOTS_URL + task.screenshot });
         var removeOverlay = el('div', { className: 'screenshot-remove-overlay' });
         var removeScreenshotBtn = el('button', null, '\u2715 Remove');
         (function (t) {
@@ -996,7 +1037,7 @@ export function getOverlayScript(port: number): string {
     }
 
     if (otherPagesCount > 0) {
-      sidebar.appendChild(el('p', { className: 'other-pages-hint' }, otherPagesCount + ' task' + (otherPagesCount > 1 ? 's' : '') + ' on other pages'));
+      sidebar.appendChild(el('p', { className: 'other-pages-hint' }, 'Showing ' + otherPagesCount + ' task' + (otherPagesCount > 1 ? 's' : '') + ' from other pages'));
     }
   }
 
@@ -1057,7 +1098,7 @@ export function getOverlayScript(port: number): string {
 
   // ── Right-click context menu ──────────────────────────────────────────
   document.addEventListener('contextmenu', function (e) {
-    var target = e.target.closest('[data-proto-id]') || e.target.closest('[data-testid]') || e.target;
+    var target = e.target;
     if (!target || target === document.body || target === document.documentElement) return;
     if (e.composedPath().indexOf(host) !== -1) return;
     e.preventDefault();
@@ -1068,12 +1109,28 @@ export function getOverlayScript(port: number): string {
   document.addEventListener('click', function (e) {
     if (!annotationMode) return;
     if (e.composedPath().indexOf(host) !== -1) return;
-    var target = e.target.closest('[data-proto-id]') || e.target.closest('[data-testid]') || e.target;
+    var target = e.target;
     if (!target || target === document.body || target === document.documentElement) return;
     e.preventDefault();
     e.stopPropagation();
     showPopover(target, e.clientX, e.clientY);
   }, true);
+
+  // ── SPA navigation detection ──────────────────────────────────────────
+  // Re-renders indicators and sidebar when the route changes without a full page
+  // reload (React Router, Next.js App Router, Vue Router, etc.).
+  var _protoCurrentHref = location.href;
+  function onRouteChange() {
+    if (location.href === _protoCurrentHref) return;
+    _protoCurrentHref = location.href;
+    renderIndicators();
+    if (sidebar && sidebar.classList.contains('open')) refreshSidebar();
+  }
+  window.addEventListener('popstate', onRouteChange);
+  var _protoOrigPush = history.pushState.bind(history);
+  history.pushState = function () { _protoOrigPush.apply(this, arguments); onRouteChange(); };
+  var _protoOrigReplace = history.replaceState.bind(history);
+  history.replaceState = function () { _protoOrigReplace.apply(this, arguments); onRouteChange(); };
 
 }());
 `;

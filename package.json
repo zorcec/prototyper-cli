@@ -1,5 +1,5 @@
 {
-  "name": "prototype-studio",
+  "name": "proto-studio",
   "version": "1.0.0",
   "description": "CLI tool for frontend prototyping with LLM assistance — review, annotate, and iterate on HTML prototypes",
   "type": "module",
