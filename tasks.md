@@ -13,3 +13,4 @@ Mark implemented tasks as you proceed. Make sure to update the TESTING.md docume
 [] Additional to the test-id, add the CSS selector as well (in the tasks front matter)
 [] add console logs when task is modifed or added via API
 [] all tasks return same selector (same test-id) in my app
+[] implement all tasks from "/home/zorcec/workspace/home-finder/tasks.md" in home-finder project
